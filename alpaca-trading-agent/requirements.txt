@@ -1,0 +1,21 @@
+# Core framework
+fastapi>=0.104.0
+uvicorn>=0.24.0
+pydantic>=2.0.0
+python-dotenv>=1.0.0
+
+# AI / LLM
+anthropic>=0.40.0
+
+# Alpaca Trading SDK
+alpaca-py>=0.30.0
+
+# MCP client (for programmatic MCP server communication)
+mcp>=1.0.0
+
+# Data / computation
+numpy>=1.24.0
+aiohttp>=3.8.0
+
+# Utilities
+typing-extensions>=4.5.0
