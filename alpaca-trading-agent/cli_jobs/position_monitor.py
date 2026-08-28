@@ -157,7 +157,7 @@ class PositionMonitor:
         logger.info("Executing position risk monitoring check...")
         timestamp = datetime.now(timezone.utc).isoformat()
 
-        cli_response = await asyncio.to_thread(self._run_cli, ["position", "list", "--format", "json"])
+        cli_response = await asyncio.to_thread(self._run_cli, ["position", "list"])
 
         if not cli_response.get("success"):
             logger.error("Failed to list positions during monitor cycle: %s", cli_response.get("error"))

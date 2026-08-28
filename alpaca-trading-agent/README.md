@@ -12,7 +12,7 @@
 
 ## 📖 Short Description
 
-Autonomous AI trading agent powered by Claude and the Alpaca stack (API + MCP + CLI) for intelligent paper trading of US equities.
+Autonomous AI trading agent powered by Claude (primary) and Gemini (fallback) alongside the Alpaca stack (API + MCP + CLI) for intelligent paper trading of US equities.
 
 ## 🚀 Long Description
 
@@ -32,7 +32,27 @@ Every decision the agent makes is logged in a **Reasoning Transparency Log** —
 
 - **Track:** AI Trading Agents
 - **Categories:** Autonomous Trading, Pairs Trading, AI Decision Engine
-- **Tech Stack:** Python 3.12, FastAPI, Claude (Anthropic), Alpaca MCP Server v2, Alpaca CLI, Alpaca Trading API (alpaca-py), React 19, Vite, TailwindCSS v4
+- **Tech Stack:** Python 3.12, FastAPI, Claude (Anthropic, primary), Gemini (Google, fallback), Alpaca MCP Server v2, Alpaca CLI, Alpaca Trading API (alpaca-py), React 19, Vite, TailwindCSS v4
+
+---
+
+## 🤖 Dual AI Provider Setup
+
+APEX uses **Anthropic Claude as the primary decision engine** for its best-in-class reasoning and tool-use with Alpaca's MCP Server. If Claude becomes unavailable due to quota or credit exhaustion, APEX **automatically falls back to Google Gemini** — with zero code changes needed.
+
+| Provider | Role | Free Tier |
+|---|---|---|
+| **Claude** (Anthropic) | Primary — reasoning, MCP tool-calling | One-time \$5 credit on signup |
+| **Gemini** (Google) | Fallback — equivalent prompt, adapted tool schemas | Recurring free daily quota via AI Studio |
+
+**How the fallback works:**
+1. Every call hits Claude first — zero performance overhead when credits are available.
+2. If Anthropic returns HTTP 402 (credit exhausted) or HTTP 429 (rate limit), the same request is automatically retried via Gemini.
+3. The `analyze_market()` response includes a `"provider"` field (`"claude"` or `"gemini"`) for full observability in logs and the reasoning transparency log.
+
+**Tool schema compatibility:** Anthropic and Gemini use different tool/function-calling formats. The Gemini path transparently adapts Anthropic-format tool definitions (`input_schema`) to Gemini's `FunctionDeclaration` format — the Claude path is never modified.
+
+**Setup:** Add `GEMINI_API_KEY` to your `.env` (see Configure step below). Get a free key at [aistudio.google.com](https://aistudio.google.com/app/apikey) — no credit card required.
 
 ---
 
@@ -114,7 +134,8 @@ cd ..
 cp .env.example .env
 # Edit .env with your credentials:
 #   - ALPACA_API_KEY & ALPACA_SECRET_KEY (from https://app.alpaca.markets/paper/dashboard)
-#   - ANTHROPIC_API_KEY (from https://console.anthropic.com)
+#   - ANTHROPIC_API_KEY (from https://console.anthropic.com) — primary AI
+#   - GEMINI_API_KEY (from https://aistudio.google.com/app/apikey, free) — fallback AI
 ```
 
 ### 3. Run

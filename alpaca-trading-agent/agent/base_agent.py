@@ -23,20 +23,26 @@ class AgentConfig:
         name: Human-readable name of the agent.
         alpaca_api_key: Alpaca API key.
         alpaca_secret_key: Alpaca API secret key.
-        anthropic_api_key: Anthropic API key for LLM decision engine.
+        gemini_api_key: Google Gemini API key (primary AI, free tier via AI Studio).
+            Required when ai_primary="gemini" (the default).
         strategy_name: Name of the trading strategy.
         description: Description of the agent.
         paper_trading: Whether to connect to Alpaca paper trading environment.
+        ai_primary: Active AI provider — "gemini" (default) or "claude".
+        anthropic_api_key: Anthropic API key. Optional — only required when
+            ai_primary="claude". Currently $0 balance; kept for future reactivation.
     """
 
     agent_id: str
     name: str
     alpaca_api_key: str
     alpaca_secret_key: str
-    anthropic_api_key: str
+    gemini_api_key: str        # Primary AI — free tier, no billing required
     strategy_name: str
     description: str = ""
     paper_trading: bool = True
+    ai_primary: str = "gemini"
+    anthropic_api_key: Optional[str] = None  # Preserved, inactive (balance: $0)
 
 
 class BaseAgent(ABC):

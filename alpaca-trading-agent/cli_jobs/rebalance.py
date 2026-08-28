@@ -193,7 +193,7 @@ class EODRebalancer:
         logger.info("Starting EOD portfolio rebalance run...")
 
         # 1. Fetch current positions via CLI
-        pos_res = await asyncio.to_thread(self._run_cli, ["position", "list", "--format", "json"])
+        pos_res = await asyncio.to_thread(self._run_cli, ["position", "list"])
         if not pos_res.get("success"):
             logger.error("Failed to retrieve current positions: %s", pos_res.get("error"))
             return {"status": "failed", "stage": "get_positions", "error": pos_res.get("error")}
@@ -203,7 +203,7 @@ class EODRebalancer:
             positions_raw = positions_raw.get("positions", [])
 
         # 2. Fetch account info via CLI to get equity
-        acc_res = await asyncio.to_thread(self._run_cli, ["account", "get", "--format", "json"])
+        acc_res = await asyncio.to_thread(self._run_cli, ["account", "get"])
         if not acc_res.get("success"):
             logger.error("Failed to retrieve account summary: %s", acc_res.get("error"))
             return {"status": "failed", "stage": "get_account", "error": acc_res.get("error")}
@@ -244,7 +244,6 @@ class EODRebalancer:
                 "--side", order["side"],
                 "--type", order["type"],
                 "--time-in-force", order["time_in_force"],
-                "--format", "json",
             ]
             sub_res = await asyncio.to_thread(self._run_cli, cmd_args)
             if sub_res.get("success"):

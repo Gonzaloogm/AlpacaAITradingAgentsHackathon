@@ -105,6 +105,49 @@ async def run_smoke_test() -> None:
         print("    -> Clock:")
         print(_pretty(clock))
         print()
+        
+        # ----------------------------------------------------------------
+        # 5. Gemini DecisionEngine test
+        # ----------------------------------------------------------------
+        print("[5] Testing Gemini DecisionEngine ...")
+        gemini_key = os.getenv("GEMINI_API_KEY")
+        if not gemini_key:
+            print("    -> SKIP: GEMINI_API_KEY not set in environment.")
+        else:
+            from agent.decision_engine import DecisionEngine
+            engine = DecisionEngine(
+                gemini_api_key=gemini_key,
+                gemini_model="gemini-3.6-flash",
+                primary="gemini"
+            )
+            # Create context from the real data we just fetched (now unwrapped)
+            market_data_ctx = {"AAPL": market_data}
+            
+            # Ensure portfolio_value is parsed as a number if it's a string from the API
+            raw_balance = account.get("portfolio_value", 0) if isinstance(account, dict) else 0
+            try:
+                real_balance = float(raw_balance)
+            except (ValueError, TypeError):
+                real_balance = 0.0
+
+            strategy_ctx = {
+                "account_balance": real_balance,
+                "positions": {},
+                "risk_tolerance": "moderate"
+            }
+            
+            print("    -> Calling engine.analyze_market() ...")
+            decision = await engine.analyze_market(market_data_ctx, strategy_ctx)
+            print("    -> Decision Output:")
+            print(_pretty(decision))
+            
+            if decision.get("quota_exceeded"):
+                print("    -> ERROR: Quota exceeded limit hit.")
+            elif decision.get("provider") != "gemini":
+                print(f"    -> ERROR: Incorrect provider used: {decision.get('provider')}")
+            else:
+                print("    -> Gemini DecisionEngine check OK.")
+        print()
 
     print("=" * 60)
     print(" Smoke test PASSED")

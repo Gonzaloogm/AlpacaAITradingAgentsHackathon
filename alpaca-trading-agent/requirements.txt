@@ -6,6 +6,7 @@ python-dotenv>=1.0.0
 
 # AI / LLM
 anthropic>=0.40.0
+google-genai>=1.0.0          # Google Gemini — fallback provider when Anthropic credits run out
 
 # Alpaca Trading SDK
 alpaca-py>=0.30.0

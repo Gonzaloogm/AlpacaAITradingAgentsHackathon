@@ -59,7 +59,11 @@ def _extract_text(content: Any) -> Any:
         return content
     combined = "\n".join(texts)
     try:
-        return json.loads(combined)
+        parsed = json.loads(combined)
+        # Unwrap Alpaca MCP v2 security envelope if present
+        if isinstance(parsed, dict) and "_alpaca_mcp_security" in parsed and "data" in parsed:
+            return parsed["data"]
+        return parsed
     except (json.JSONDecodeError, TypeError):
         return combined
 
@@ -242,7 +246,7 @@ class AlpacaMCPClient:
 
     async def get_account(self) -> Dict[str, Any]:
         """Fetch Alpaca account summary (equity, cash, buying_power, status)."""
-        return await self.call_tool("get_account", {})
+        return await self.call_tool("get_account_info", {})
 
     async def get_portfolio_history(
         self,
