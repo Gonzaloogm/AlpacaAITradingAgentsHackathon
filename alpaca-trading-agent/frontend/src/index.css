@@ -1,0 +1,104 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import "tailwindcss";
+
+/* === FinanceHub Design Tokens === */
+:root {
+  --bg-dark: #0D0F14;
+  --bg-card: #161920;
+  --color-teal: #00BFA5;
+  --color-cyan: #0091EA;
+  --color-red: #EF4444;
+  --color-text-main: #94A3B8; /* text-slate-400 */
+  --color-text-header: #FFFFFF;
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--bg-dark);
+  color: var(--color-text-main);
+  font-family: var(--font-sans);
+  font-size: 0.875rem; /* Clean 14px base */
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+/* === Institutional Header === */
+.sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  height: 60px;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  background: rgba(13, 15, 20, 0.85);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* === FinanceHub Panel Styles === */
+.card-container, .dashboard-card {
+  background-color: var(--bg-card);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px; /* Slightly sharper, corporate corners */
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* === Interactive Arbitrage Glow === */
+.arbitrage-glow-active {
+  border-color: rgba(0, 191, 165, 0.4) !important;
+  box-shadow: 0 0 20px rgba(0, 191, 165, 0.1), inset 0 0 12px rgba(0, 191, 165, 0.05);
+}
+
+.arbitrage-glow-alert {
+  border-color: rgba(239, 68, 68, 0.4) !important;
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.1), inset 0 0 12px rgba(239, 68, 68, 0.05);
+}
+
+/* === Typography Helpers === */
+.title-main {
+  color: var(--color-text-header);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.text-teal { color: var(--color-teal); }
+.text-cyan { color: var(--color-cyan); }
+.text-slate { color: var(--color-text-main); }
+
+/* === Tabs indicator === */
+.active-tab-indicator::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--color-teal);
+  box-shadow: 0 -2px 10px var(--color-teal);
+}
+
+/* === Terminal === */
+.terminal-compact {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: #64748B;
+}
+
+/* === Animations === */
+@keyframes signal-pulse {
+  0% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.95); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.signal-animate {
+  animation: signal-pulse 2s infinite ease-in-out;
+}
+
+/* === Scrollbar === */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 4px; }
