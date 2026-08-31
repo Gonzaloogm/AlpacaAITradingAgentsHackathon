@@ -28,7 +28,7 @@ from backend.models import (
 from backend.reasoning_log import ReasoningLog
 from backend.websocket import ConnectionManager
 
-# Optional environment setup
+# Environment setup
 try:
     from dotenv import load_dotenv
 
@@ -36,21 +36,21 @@ try:
 except ImportError:
     pass
 
-# Optional imports for agent, strategy, and MCP client modules
+# Package imports for agent, strategy, and MCP client modules
 try:
     from agent.decision_engine import DecisionEngine  # type: ignore
 except ImportError:
-    DecisionEngine = None  # TODO: Wire actual DecisionEngine once available
+    DecisionEngine = None
 
 try:
     from strategy.pairs_trading import PairsTradingStrategy  # type: ignore
 except ImportError:
-    PairsTradingStrategy = None  # TODO: Wire actual Strategy module once available
+    PairsTradingStrategy = None
 
 try:
-    from mcp_client.alpaca import AlpacaMCPClient  # type: ignore
+    from mcp_client.client import AlpacaMCPClient  # type: ignore
 except ImportError:
-    AlpacaMCPClient = None  # TODO: Wire actual Alpaca MCP Client once available
+    AlpacaMCPClient = None
 
 logger = logging.getLogger("alpaca_agent_server")
 logging.basicConfig(level=logging.INFO)
@@ -58,7 +58,7 @@ logging.basicConfig(level=logging.INFO)
 # Global Application Instance & Configuration
 app = FastAPI(
     title="Alpaca AI Trading Agent",
-    description="AI-powered trading agent using Claude + Alpaca MCP",
+    description="AI-powered trading agent using Claude/Gemini + Alpaca MCP",
     version="1.0.0",
 )
 
@@ -84,7 +84,7 @@ last_decision: Optional[Dict[str, Any]] = None
 total_trades: int = 0
 total_pnl: float = 0.0
 
-# Initialized client instances (placeholders or real if imported)
+# Initialized client instances
 decision_engine: Any = None
 alpaca_client: Any = None
 
@@ -97,19 +97,50 @@ async def startup_event() -> None:
 
     api_key = os.getenv("ALPACA_API_KEY", "")
     secret_key = os.getenv("ALPACA_SECRET_KEY", "")
+    gemini_key = os.getenv("GEMINI_API_KEY", "")
+    anthropic_key = os.getenv("ANTHROPIC_API_KEY", "")
     paper_trading = os.getenv("ALPACA_PAPER", "true").lower() == "true"
 
-    if AlpacaMCPClient:
-        # TODO: Initialize real AlpacaMCPClient with environment variables
-        alpaca_client = AlpacaMCPClient(
-            api_key=api_key, secret_key=secret_key, paper=paper_trading
-        )
+    if AlpacaMCPClient and api_key and secret_key:
+        try:
+            alpaca_client = AlpacaMCPClient(
+                api_key=api_key, secret_key=secret_key, paper=paper_trading
+            )
+            await alpaca_client.start()
+            logger.info("AlpacaMCPClient subprocess started successfully.")
+        except Exception as e:
+            logger.warning("Could not start AlpacaMCPClient subprocess: %s", e)
 
     if DecisionEngine:
-        # TODO: Initialize real DecisionEngine with Alpaca client and LLM configuration
-        decision_engine = DecisionEngine(alpaca_client=alpaca_client)
+        primary_provider = "gemini" if gemini_key else ("claude" if anthropic_key else "gemini")
+        try:
+            decision_engine = DecisionEngine(
+                gemini_api_key=gemini_key,
+                anthropic_api_key=anthropic_key,
+                primary=primary_provider,
+            )
+            logger.info("DecisionEngine initialized with primary provider: %s", primary_provider)
+        except Exception as e:
+            logger.warning("Could not initialize DecisionEngine: %s", e)
 
     logger.info("Server startup complete. Environment: paper=%s", paper_trading)
+
+
+@app.on_event("shutdown")
+async def shutdown_event() -> None:
+    """Clean up resources on FastAPI shutdown."""
+    global alpaca_client, agent_running, strategy_task
+    logger.info("Shutting down Alpaca AI Trading Agent Server...")
+    agent_running = False
+    if strategy_task and not strategy_task.done():
+        strategy_task.cancel()
+
+    if alpaca_client and hasattr(alpaca_client, "stop"):
+        try:
+            await alpaca_client.stop()
+            logger.info("AlpacaMCPClient stopped cleanly.")
+        except Exception as e:
+            logger.error("Error stopping AlpacaMCPClient: %s", e)
 
 
 # -----------------------------------------------------------------------------
@@ -122,12 +153,16 @@ async def health_check() -> Dict[str, Any]:
     """Health check endpoint to verify server availability.
 
     Returns:
-        Dictionary containing server status, version, and UTC timestamp.
+        Dictionary containing server status, version, UTC timestamp, and integration states.
     """
+    mcp_connected = bool(alpaca_client and getattr(alpaca_client, "is_connected", False))
+    engine_ready = bool(decision_engine is not None)
     return {
         "status": "ok",
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "version": app.version,
+        "mcp_connected": mcp_connected,
+        "engine_ready": engine_ready,
     }
 
 
@@ -143,11 +178,14 @@ async def get_account() -> Dict[str, Any]:
     Returns:
         Account details including buying power, cash balance, and portfolio value.
     """
-    if alpaca_client and hasattr(alpaca_client, "get_account"):
-        # TODO: Replace with real call: return await alpaca_client.get_account()
-        pass
+    if alpaca_client and getattr(alpaca_client, "is_connected", False):
+        try:
+            res = await alpaca_client.get_account()
+            return res
+        except Exception as e:
+            logger.error("Error fetching account via AlpacaMCPClient: %s", e)
 
-    # Placeholder / mock data until Alpaca MCP integration is connected
+    # Placeholder / mock fallback if MCP is disconnected
     return {
         "id": "mock-account-123",
         "account_number": "PA31415926",
@@ -171,11 +209,16 @@ async def get_positions() -> List[Dict[str, Any]]:
     Returns:
         List of active open position dictionaries.
     """
-    if alpaca_client and hasattr(alpaca_client, "get_positions"):
-        # TODO: Replace with real call: return await alpaca_client.get_positions()
-        pass
+    if alpaca_client and getattr(alpaca_client, "is_connected", False):
+        try:
+            res = await alpaca_client.get_positions()
+            if isinstance(res, list):
+                return res
+            return [res] if res else []
+        except Exception as e:
+            logger.error("Error fetching positions via AlpacaMCPClient: %s", e)
 
-    # Placeholder / mock data
+    # Placeholder / mock data fallback
     return [
         {
             "asset_id": "904807e2-320e-4c3d-b4d9-61ab8b9a1e34",
@@ -221,11 +264,16 @@ async def get_orders(
     Returns:
         List of order dictionaries.
     """
-    if alpaca_client and hasattr(alpaca_client, "get_orders"):
-        # TODO: Replace with real call: return await alpaca_client.get_orders(status=status, limit=limit)
-        pass
+    if alpaca_client and getattr(alpaca_client, "is_connected", False):
+        try:
+            res = await alpaca_client.get_orders(status=status, limit=limit)
+            if isinstance(res, list):
+                return res
+            return [res] if res else []
+        except Exception as e:
+            logger.error("Error fetching orders via AlpacaMCPClient: %s", e)
 
-    # Placeholder / mock data
+    # Placeholder / mock data fallback
     return [
         {
             "id": "order-001",
@@ -256,11 +304,14 @@ async def get_portfolio_history(
     Returns:
         Dictionary containing equity time series, timestamps, and profit/loss arrays.
     """
-    if alpaca_client and hasattr(alpaca_client, "get_portfolio_history"):
-        # TODO: Replace with real call: return await alpaca_client.get_portfolio_history(period, timeframe)
-        pass
+    if alpaca_client and getattr(alpaca_client, "is_connected", False):
+        try:
+            res = await alpaca_client.get_portfolio_history(period=period, timeframe=timeframe)
+            return res
+        except Exception as e:
+            logger.error("Error fetching portfolio history via AlpacaMCPClient: %s", e)
 
-    # Placeholder / mock data
+    # Placeholder / mock data fallback
     return {
         "timeframe": timeframe,
         "period": period,
@@ -270,6 +321,125 @@ async def get_portfolio_history(
         "profit_loss": [0.0, 2500.0, 5230.50],
         "profit_loss_pct": [0.0, 0.025, 0.0523],
     }
+
+
+# -----------------------------------------------------------------------------
+# Autonomous Strategy Background Loop
+# -----------------------------------------------------------------------------
+
+
+async def _run_strategy_loop(strategy_name: str) -> None:
+    """Autonomous background loop evaluating market signals and executing decisions."""
+    global agent_running, last_decision, total_trades, total_pnl
+    logger.info("Starting autonomous strategy loop for '%s'...", strategy_name)
+
+    strategy = PairsTradingStrategy(symbol_a="SPY", symbol_b="QQQ") if PairsTradingStrategy else None
+
+    while agent_running:
+        try:
+            cycle_id = len(reasoning_log.get_entries(limit=10000)) + 1
+            logger.info("Executing strategy cycle #%d for %s", cycle_id, strategy_name)
+
+            market_data: Dict[str, Any] = {}
+            if alpaca_client and getattr(alpaca_client, "is_connected", False):
+                try:
+                    snap_a = await alpaca_client.call_tool("get_stock_snapshot", {"symbol": "SPY"})
+                    snap_b = await alpaca_client.call_tool("get_stock_snapshot", {"symbol": "QQQ"})
+                    market_data = {"SPY": snap_a, "QQQ": snap_b}
+                except Exception as err:
+                    logger.warning("Could not fetch real snapshot via MCP: %s", err)
+
+            if not market_data:
+                # Generate synthetic mock price data for strategy analysis if offline
+                import random
+                market_data = {
+                    "SPY": [500.0 + random.uniform(-2, 2) for _ in range(20)],
+                    "QQQ": [430.0 + random.uniform(-2, 2) for _ in range(20)],
+                }
+
+            # 2. Compute quantitative signal
+            signal = {}
+            if strategy:
+                signal = await strategy.analyze(market_data)
+
+            # 3. Decision Engine evaluation
+            decision = {
+                "action": "hold",
+                "confidence": 0.5,
+                "reasoning": "Standard monitoring turn — spread within normal bounds.",
+                "parameters": {},
+                "provider": getattr(decision_engine, "primary", "none") if decision_engine else "none",
+            }
+            if decision_engine:
+                try:
+                    decision = await decision_engine.analyze_market(
+                        market_data=market_data,
+                        strategy_context={
+                            "strategy_name": strategy_name,
+                            "signal": signal,
+                            "symbol_a": "SPY",
+                            "symbol_b": "QQQ",
+                        },
+                    )
+                except Exception as err:
+                    logger.error("DecisionEngine evaluation error: %s", err)
+
+            last_decision = decision
+            action = str(decision.get("action", "hold")).lower()
+            tool_calls = []
+
+            # 4. Execute order if action is buy or sell
+            if action in ("buy", "sell") and alpaca_client and getattr(alpaca_client, "is_connected", False):
+                params = decision.get("parameters", {})
+                symbol = params.get("symbol", "SPY")
+                qty = float(params.get("qty", 1.0))
+                try:
+                    order_res = await alpaca_client.place_order(
+                        symbol=symbol, qty=qty, side=action, type="market", time_in_force="day"
+                    )
+                    tool_calls.append({
+                        "name": "place_stock_order",
+                        "args": {"symbol": symbol, "qty": qty, "side": action},
+                        "result": order_res,
+                    })
+                    total_trades += 1
+                except Exception as err:
+                    logger.error("Order placement error via MCP: %s", err)
+
+            # 5. Log cycle to Reasoning Transparency Log
+            log_entry = reasoning_log.add_entry(
+                cycle_id=cycle_id,
+                market_data=market_data,
+                llm_reasoning=str(decision.get("reasoning", "")),
+                decision=decision,
+                mcp_tools_called=tool_calls,
+                orders_placed=[tc.get("result") for tc in tool_calls if "result" in tc],
+                result={"pnl": total_pnl, "total_trades": total_trades, "status": "completed"},
+            )
+
+            # 6. Broadcast event over WebSockets
+            await ws_manager.broadcast({
+                "type": "reasoning_log_entry",
+                "data": log_entry,
+            })
+            await ws_manager.broadcast({
+                "type": "agent_state_update",
+                "data": {
+                    "is_running": agent_running,
+                    "last_decision": last_decision,
+                    "total_trades": total_trades,
+                    "total_pnl": total_pnl,
+                },
+            })
+
+        except asyncio.CancelledError:
+            logger.info("Autonomous strategy loop cancelled.")
+            break
+        except Exception as e:
+            logger.error("Error in strategy loop cycle: %s", e)
+
+        # Loop pacing (sleep 30s per turn)
+        await asyncio.sleep(30)
 
 
 # -----------------------------------------------------------------------------
@@ -298,8 +468,7 @@ async def start_strategy(
         current_strategy = config.strategy_name
 
     agent_running = True
-    # TODO: Start background trading loop task e.g.,
-    # strategy_task = asyncio.create_task(_run_strategy_loop(current_strategy))
+    strategy_task = asyncio.create_task(_run_strategy_loop(current_strategy))
 
     await ws_manager.broadcast(
         {
@@ -365,38 +534,19 @@ async def get_agent_state() -> AgentState:
 async def get_reasoning_log(
     limit: int = 50, offset: int = 0
 ) -> List[Dict[str, Any]]:
-    """Retrieve paginated audit entries from the transparent reasoning log.
-
-    Args:
-        limit: Maximum entries to return.
-        offset: Pagination offset.
-
-    Returns:
-        List of decision cycle dictionaries.
-    """
+    """Retrieve paginated audit entries from the transparent reasoning log."""
     return reasoning_log.get_entries(limit=limit, offset=offset)
 
 
 @app.get("/api/reasoning-log/summary")
 async def get_reasoning_log_summary() -> Dict[str, Any]:
-    """Retrieve aggregate summary statistics for all decision cycles.
-
-    Returns:
-        Summary metrics including total trades, win rate, and tool usage.
-    """
+    """Retrieve aggregate summary statistics for all decision cycles."""
     return reasoning_log.get_summary()
 
 
 @app.get("/api/reasoning-log/{cycle_id}")
 async def get_reasoning_log_entry(cycle_id: int) -> Dict[str, Any]:
-    """Retrieve a specific reasoning log entry by cycle_id.
-
-    Args:
-        cycle_id: Unique cycle identifier.
-
-    Returns:
-        Log entry dictionary.
-    """
+    """Retrieve a specific reasoning log entry by cycle_id."""
     entry = reasoning_log.get_entry(cycle_id)
     if not entry:
         raise HTTPException(
@@ -413,43 +563,54 @@ async def get_reasoning_log_entry(cycle_id: int) -> Dict[str, Any]:
 
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat_with_agent(request: ChatRequest) -> ChatResponse:
-    """Send a user message to the AI agent for analysis or execution.
-
-    Args:
-        request: ChatRequest containing user message and optional session_id.
-
-    Returns:
-        ChatResponse containing agent text output and tool calls executed.
-    """
+    """Send a user message to the AI agent for analysis or execution."""
     session_id = request.session_id or str(uuid.uuid4())
     if session_id not in chat_sessions:
         chat_sessions[session_id] = []
 
-    chat_sessions[session_id].append(
-        {"role": "user", "content": request.message}
-    )
+    chat_sessions[session_id].append({"role": "user", "content": request.message})
 
-    if decision_engine and hasattr(decision_engine, "chat"):
-        # TODO: Replace placeholder with actual DecisionEngine.chat call
-        # response_text, tool_calls = await decision_engine.chat(session_id, request.message)
-        pass
+    tool_calls: List[Dict[str, Any]] = []
+    response_text: str = ""
 
-    # Placeholder response logic
-    response_text = (
-        f"Received message: '{request.message}'. The Alpaca AI Agent is observing "
-        f"market conditions under the '{current_strategy}' strategy."
-    )
-    tool_calls = [
-        {
-            "name": "get_account",
-            "args": {},
-            "result": {"buying_power": 100000.0},
-        }
-    ]
+    if decision_engine:
+        try:
+            available_tools = []
+            if alpaca_client and getattr(alpaca_client, "is_connected", False):
+                try:
+                    available_tools = await alpaca_client.list_tools()
+                except Exception as err:
+                    logger.warning("Could not list tools from AlpacaMCPClient: %s", err)
 
-    chat_sessions[session_id].append(
-        {"role": "assistant", "content": response_text}
-    )
+            response_text, tool_calls_made = await decision_engine.chat(
+                user_message=request.message,
+                conversation_history=chat_sessions[session_id],
+                available_tools=available_tools,
+            )
+
+            # If tools were called and MCP client is connected, execute tool calls
+            if alpaca_client and getattr(alpaca_client, "is_connected", False) and tool_calls_made:
+                for tc in tool_calls_made:
+                    t_name = tc.get("name", "")
+                    t_args = tc.get("input", {})
+                    try:
+                        res = await alpaca_client.call_tool(t_name, t_args)
+                        tool_calls.append({"name": t_name, "args": t_args, "result": res})
+                    except Exception as err:
+                        logger.error("Error calling MCP tool '%s': %s", t_name, err)
+                        tool_calls.append({"name": t_name, "args": t_args, "result": f"Error: {err}"})
+            else:
+                tool_calls = tool_calls_made
+
+        except Exception as err:
+            logger.error("Error in decision_engine.chat: %s", err)
+            response_text = f"An error occurred while processing your request: {err}"
+    else:
+        response_text = (
+            f"Received message: '{request.message}'. AI DecisionEngine is not initialized (check API keys)."
+        )
+
+    chat_sessions[session_id].append({"role": "assistant", "content": response_text})
 
     return ChatResponse(
         response=response_text,
@@ -460,11 +621,7 @@ async def chat_with_agent(request: ChatRequest) -> ChatResponse:
 
 @app.post("/api/session/new")
 async def create_chat_session() -> Dict[str, Any]:
-    """Create a new chat conversation session.
-
-    Returns:
-        Dictionary containing new session_id and creation timestamp.
-    """
+    """Create a new chat conversation session."""
     session_id = str(uuid.uuid4())
     chat_sessions[session_id] = []
     return {
@@ -475,14 +632,7 @@ async def create_chat_session() -> Dict[str, Any]:
 
 @app.get("/api/session/{session_id}/history")
 async def get_session_history(session_id: str) -> Dict[str, Any]:
-    """Retrieve message history for a specific chat session.
-
-    Args:
-        session_id: Target session identifier.
-
-    Returns:
-        Dictionary containing session_id and list of chat messages.
-    """
+    """Retrieve message history for a specific chat session."""
     if session_id not in chat_sessions:
         raise HTTPException(
             status_code=404, detail=f"Session '{session_id}' not found"
@@ -492,14 +642,7 @@ async def get_session_history(session_id: str) -> Dict[str, Any]:
 
 @app.delete("/api/session/{session_id}")
 async def delete_session(session_id: str) -> Dict[str, Any]:
-    """Delete a chat session and purge its message history.
-
-    Args:
-        session_id: Target session identifier to delete.
-
-    Returns:
-        Confirmation dictionary.
-    """
+    """Delete a chat session and purge its message history."""
     if session_id in chat_sessions:
         del chat_sessions[session_id]
         return {"status": "deleted", "session_id": session_id}
@@ -515,11 +658,7 @@ async def delete_session(session_id: str) -> Dict[str, Any]:
 
 @app.websocket("/api/stream")
 async def websocket_endpoint(websocket: WebSocket) -> None:
-    """WebSocket endpoint for real-time data and event streaming.
-
-    Args:
-        websocket: Standard FastAPI WebSocket instance.
-    """
+    """WebSocket endpoint for real-time data and event streaming."""
     await ws_manager.connect(websocket)
     try:
         while True:

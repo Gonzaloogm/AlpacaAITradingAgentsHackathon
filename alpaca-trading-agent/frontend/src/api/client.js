@@ -1,11 +1,9 @@
 /**
- * API Client — ported from wallet-utils.js
+ * API Client for APEX — Alpaca AI Trading Agent backend
  */
-const PHALA_URL = 'https://d571a329e5081e0d1b8fd65773ba0cd84e9e3457-8000.dstack-pha-prod9.phala.network';
-
 export class APIClient {
   constructor() {
-    this.baseURL = (window.location.hostname === 'localhost' ? 'http://localhost:8000' : '') || import.meta.env.VITE_API_URL;
+    this.baseURL = (window.location.hostname === 'localhost' ? 'http://localhost:8000' : '') || import.meta.env.VITE_API_URL || 'http://localhost:8000';
   }
 
   async request(endpoint, options = {}) {
@@ -15,19 +13,16 @@ export class APIClient {
         headers: { 'Content-Type': 'application/json', ...options.headers },
       });
 
-      // Handle empty responses to prevent "Unexpected end of JSON input"
       const text = await response.text();
       let data = {};
       if (text) {
         try {
           data = JSON.parse(text);
         } catch (e) {
-          console.warn(`[API] Malformed JSON or Non-JSON response: ${text.slice(0, 100)}`);
-          // Fallback to empty object to prevent crash, but log for debugging
+          console.warn(`[API] Non-JSON response from ${endpoint}: ${text.slice(0, 100)}`);
           data = { _raw: text };
         }
       } else if (response.ok && response.status !== 204) {
-        // Expected data but got empty body - return success with empty object or custom signaling
         return { success: true, data: {}, note: 'Empty response' };
       }
 
@@ -45,14 +40,19 @@ export class APIClient {
   get(endpoint) { return this.request(endpoint, { method: 'GET' }); }
   post(endpoint, body = {}) { return this.request(endpoint, { method: 'POST', body: JSON.stringify(body) }); }
 
+  getHealth() { return this.get('/health'); }
   getAccount() { return this.get('/api/account'); }
   getPositions() { return this.get('/api/positions'); }
   getOrders() { return this.get('/api/orders'); }
-  getPortfolioHistory() { return this.get('/api/portfolio-history'); }
-  
-  getStatus() { return this.get('/api/status'); }
-  getAgentCard() { return this.get('/agent.json'); }
+  getPortfolioHistory(period = '1M', timeframe = '1D') { 
+    return this.get(`/api/portfolio-history?period=${period}&timeframe=${timeframe}`); 
+  }
   getAgentState() { return this.get('/api/agent-state'); }
+  
+  getReasoningLog(limit = 50, offset = 0) { 
+    return this.get(`/api/reasoning-log?limit=${limit}&offset=${offset}`); 
+  }
+  getReasoningSummary() { return this.get('/api/reasoning-log/summary'); }
 
   async sendChatMessage(sessionId, message) {
     return this.post('/api/chat', { session_id: sessionId, message });
@@ -66,11 +66,9 @@ export class APIClient {
     return this.get(`/api/session/${sessionId}/history`);
   }
 
-  async quickAction(sessionId, tool, args = {}) {
-    return this.post('/api/quick-action', { session_id: sessionId, tool, arguments: args });
+  startStrategy(config = null) { 
+    return this.post('/api/strategy/start', config || { strategy_name: 'pairs_trading' }); 
   }
-
-  startStrategy() { return this.post('/api/strategy/start'); }
   stopStrategy() { return this.post('/api/strategy/stop'); }
 }
 

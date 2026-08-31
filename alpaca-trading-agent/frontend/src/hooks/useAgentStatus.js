@@ -1,27 +1,38 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiClient } from '../api/client';
 
-export function useAgentStatus(pollInterval = 15000) {
+export function useAgentStatus(pollInterval = 5000) {
   const [account, setAccount] = useState(null);
+  const [agentState, setAgentState] = useState(null);
+  const [health, setHealth] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const fetchAccount = useCallback(async () => {
-    const result = await apiClient.getAccount();
-    if (result.success) {
-      setAccount(result.data);
+  const fetchAll = useCallback(async () => {
+    try {
+      const [accRes, stateRes, healthRes] = await Promise.all([
+        apiClient.getAccount(),
+        apiClient.getAgentState(),
+        apiClient.getHealth(),
+      ]);
+
+      if (accRes.success) setAccount(accRes.data);
+      if (stateRes.success) setAgentState(stateRes.data);
+      if (healthRes.success) setHealth(healthRes.data);
+
       setError(null);
-    } else {
-      setError(result.error);
+    } catch (err) {
+      setError(err.message || 'Error fetching agent status');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => {
-    fetchAccount();
-    const id = setInterval(fetchAccount, pollInterval);
+    fetchAll();
+    const id = setInterval(fetchAll, pollInterval);
     return () => clearInterval(id);
-  }, [fetchAccount, pollInterval]);
+  }, [fetchAll, pollInterval]);
 
-  return { account, loading, error, refetch: fetchAccount };
+  return { account, agentState, health, loading, error, refetch: fetchAll };
 }

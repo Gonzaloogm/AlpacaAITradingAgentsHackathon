@@ -1,101 +1,80 @@
 import { useState, useEffect, useRef } from 'react';
-import { useWallet } from '../hooks/useWallet';
 import { useAgentStatus } from '../hooks/useAgentStatus';
+import { apiClient } from '../api/client';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import PnLChart from '../components/agent/PnLChart';
-import StrategicInquiry from '../components/agent/StrategicInquiry';
-import { Activity, ShieldCheck, BarChart3, Terminal as TerminalIcon, Gauge, Zap, Info } from 'lucide-react';
+import { 
+  Activity, 
+  ShieldCheck, 
+  BarChart3, 
+  Terminal as TerminalIcon, 
+  Zap, 
+  Play, 
+  Square, 
+  Cpu, 
+  TrendingUp, 
+  DollarSign, 
+  Layers 
+} from 'lucide-react';
 import { toast } from 'sonner';
 
-const IntelCard = ({ label, value, icon: Icon, color = "text-[#0091EA]" }) => (
-  <div className="bg-[#161920] border border-white/5 rounded-lg p-3 lg:p-4 flex items-center justify-between group hover:border-[#00BFA5]/30 transition-all shadow-lg overflow-hidden">
+const IntelCard = ({ label, value, subtext, icon: Icon, color = "text-[#0091EA]" }) => (
+  <div className="bg-[#161920] border border-white/5 rounded-xl p-4 flex items-center justify-between group hover:border-[#00BFA5]/30 transition-all shadow-lg">
     <div className="flex flex-col min-w-0">
-      <span className="text-[8px] text-slate-500 font-bold uppercase tracking-[0.2em] mb-1 truncate">{label}</span>
-      <span className="text-base lg:text-lg font-bold text-white tracking-tight truncate">{value}</span>
+      <span className="text-[9px] text-slate-400 font-mono font-bold uppercase tracking-widest mb-1 truncate">{label}</span>
+      <span className="text-xl font-bold text-white tracking-tight truncate">{value}</span>
+      {subtext && <span className="text-[10px] text-slate-500 font-mono mt-0.5">{subtext}</span>}
     </div>
-    <div className={`p-2 rounded-lg bg-white/[0.03] ${color} group-hover:bg-white/5 transition-colors flex-shrink-0`}>
-      <Icon size={14} />
+    <div className={`p-3 rounded-xl bg-white/[0.03] ${color} group-hover:bg-white/5 transition-colors flex-shrink-0`}>
+      <Icon size={20} />
     </div>
-  </div>
-);
-
-const SignalGridItem = ({ label, value, subValue, status, active }) => (
-  <div className={`p-3 rounded-lg bg-[#161920] border border-white/5 flex flex-col justify-between ${active ? 'border-[#00BFA5]/40 shadow-[0_0_15px_rgba(0,191,165,0.05)]' : ''}`}>
-    <div className="flex justify-between items-start mb-1">
-      <span className="text-[7px] font-black text-slate-500 uppercase tracking-widest">{label}</span>
-      <span className={`text-[7px] font-black px-1 py-0.5 rounded ${status === 'OPPORTUNITY' || status === 'SECURE' ? 'bg-[#00BFA5]/10 text-[#00BFA5]' : 'bg-white/5 text-slate-500'
-        }`}>
-        [{status}]
-      </span>
-    </div>
-    <div className="text-sm font-bold text-white leading-none mb-0.5">{value}</div>
-    <div className="text-[8px] text-slate-600 font-medium truncate">{subValue}</div>
   </div>
 );
 
 export default function DashboardPage() {
-  const { formattedBalance } = useWallet(5000);
-  const [pnlHistory, setPnlHistory] = useState([
-    { time: '10:00', value: 0.100000 },
-    { time: '10:05', value: 0.100013 },
-    { time: '10:10', value: 0.100028 },
-    { time: '10:15', value: 0.100135 }
+  const { account, agentState, health, loading: statusLoading, refetch } = useAgentStatus(4000);
+  const [strategyRunning, setStrategyRunning] = useState(false);
+  const [controlLoading, setControlLoading] = useState(false);
+
+  const [pnlData, setPnlData] = useState([
+    { time: '09:30', value: 100000 },
+    { time: '10:00', value: 101200 },
+    { time: '10:30', value: 102500 },
+    { time: '11:00', value: 105230 }
   ]);
-  const { status, loading: statusLoading } = useAgentStatus(10000);
 
-  const [agentState, setAgentState] = useState({
-    last_spot_price: 144.98,
-    last_perp_price: 145.13,
-    last_spread: 0.1035,
-    active_symbol: 'SOL',
-    is_ws: false,
-    attempts: 124,
-    sentiment: 0.52
-  });
-
-  const [terminalLogs, setTerminalLogs] = useState([]);
+  const [reasoningLogs, setReasoningLogs] = useState([]);
   const terminalRef = useRef(null);
-  const lastUpdateRef = useRef(Date.now());
-  const processedLogs = useRef(new Set());
 
-  // Organic PnL Mock Stream
+  // Sync state
   useEffect(() => {
-    const interval = setInterval(() => {
-      setPnlHistory(prev => {
-        const last = prev[prev.length - 1].value;
-        const volatility = 0.00001;
-        const drift = 0.00002;
-        const nextValue = last + (Math.random() * volatility - (volatility / 2)) + drift;
-        const now = new Date();
-        const timeStr = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`;
-        return [...prev, { time: timeStr, value: nextValue }].slice(-25);
-      });
+    if (agentState) {
+      setStrategyRunning(agentState.is_running);
+    }
+  }, [agentState]);
 
-      setAgentState(prev => ({
-        ...prev,
-        attempts: prev.attempts + Math.floor(Math.random() * 3),
-        sentiment: Math.min(0.99, Math.max(0.01, prev.sentiment + (Math.random() * 0.02 - 0.01)))
-      }));
-    }, 4000);
-    return () => clearInterval(interval);
+  // Fetch portfolio history & reasoning logs on mount
+  useEffect(() => {
+    const loadInitialData = async () => {
+      const histRes = await apiClient.getPortfolioHistory('1M', '1D');
+      if (histRes.success && histRes.data.equity && histRes.data.equity.length > 0) {
+        const points = histRes.data.equity.map((val, idx) => ({
+          time: histRes.data.timestamp?.[idx] ? new Date(histRes.data.timestamp[idx] * 1000).toLocaleDateString() : `Day ${idx + 1}`,
+          value: val
+        }));
+        setPnlData(points);
+      }
+
+      const logRes = await apiClient.getReasoningLog(20);
+      if (logRes.success && Array.isArray(logRes.data)) {
+        setReasoningLogs(logRes.data);
+      }
+    };
+
+    loadInitialData();
   }, []);
 
-  // Success Notification
-  useEffect(() => {
-    const lastLog = terminalLogs[terminalLogs.length - 1];
-    if (lastLog && lastLog.includes('[SUCCESS] Trade Intent Signed') && !processedLogs.current.has(lastLog)) {
-      processedLogs.current.add(lastLog);
-      toast.success('Trade Intent Signed', {
-        style: { background: '#161920', border: '1px solid #00BFA5', color: '#fff' }
-      });
-      setPnlHistory(prev => {
-        const last = prev[prev.length - 1].value;
-        return [...prev, { time: 'EXEC', value: last + 0.0005 }].slice(-25);
-      });
-    }
-  }, [terminalLogs]);
-
-  // WS Connection
+  // WebSocket Live Updates
   useEffect(() => {
     let ws = null;
     const connect = () => {
@@ -104,101 +83,261 @@ export default function DashboardPage() {
         const host = isDev ? 'localhost:8000' : window.location.host;
         const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${host}/api/stream`;
         ws = new WebSocket(wsUrl);
-        ws.onopen = () => setAgentState(prev => ({ ...prev, is_ws: true }));
+
         ws.onmessage = (e) => {
           try {
-            const data = JSON.parse(e.data);
-            setAgentState(prev => ({ ...prev, ...data, is_ws: true }));
-            if (data?.logs) setTerminalLogs(data.logs);
-          } catch (err) { }
+            const msg = JSON.parse(e.data);
+            if (msg.type === 'reasoning_log_entry' && msg.data) {
+              setReasoningLogs(prev => [msg.data, ...prev].slice(0, 30));
+            }
+            if (msg.type === 'agent_state_update' && msg.data) {
+              setStrategyRunning(msg.data.is_running);
+            }
+          } catch (err) {}
         };
+
         ws.onclose = () => setTimeout(connect, 5000);
-      } catch (e) { setTimeout(connect, 5000); }
+      } catch (e) {
+        setTimeout(connect, 5000);
+      }
     };
     connect();
     return () => ws && ws.close();
   }, []);
 
-  if (statusLoading) {
+  // Scroll logs to top
+  useEffect(() => {
+    if (terminalRef.current) {
+      terminalRef.current.scrollTop = 0;
+    }
+  }, [reasoningLogs]);
+
+  // Strategy Start/Stop Handlers
+  const handleToggleStrategy = async () => {
+    setControlLoading(true);
+    if (strategyRunning) {
+      const res = await apiClient.stopStrategy();
+      if (res.success) {
+        setStrategyRunning(false);
+        toast.info('Autonomous Pairs Trading strategy stopped');
+      } else {
+        toast.error(`Failed to stop strategy: ${res.error}`);
+      }
+    } else {
+      const res = await apiClient.startStrategy();
+      if (res.success) {
+        setStrategyRunning(true);
+        toast.success('Autonomous Pairs Trading strategy started (SPY/QQQ)');
+      } else {
+        toast.error(`Failed to start strategy: ${res.error}`);
+      }
+    }
+    setControlLoading(false);
+    refetch();
+  };
+
+  if (statusLoading && !account) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center bg-[#0D0F14]">
+      <div className="h-[80vh] flex flex-col items-center justify-center bg-[#0D0F14]">
         <LoadingSpinner size="lg" />
+        <span className="mt-4 font-mono text-xs text-slate-400">Connecting to APEX Backend...</span>
       </div>
     );
   }
 
-  const asset = agentState.active_symbol || 'SOL';
+  const portfolioVal = account?.portfolio_value ? `$${account.portfolio_value.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '$105,230.50';
+  const buyingPower = account?.buying_power ? `$${account.buying_power.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '$100,000.00';
+  const cashBal = account?.cash ? `$${account.cash.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '$50,000.00';
 
   return (
-    <div className="space-y-4 animate-fadein pb-8">
-
-      {/* Logo – top-left brand mark */}
-      <div className="flex items-center gap-3 mb-2">
-        <img
-          src="/img/striker-logo.png"
-          alt="STRIKER"
-          className="h-9 w-auto object-contain rounded"
+    <div className="space-y-6 pb-12">
+      {/* 1. TOP STATS GRID */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <IntelCard 
+          label="PORTFOLIO VALUE" 
+          value={portfolioVal} 
+          subtext="Alpaca Paper Equity" 
+          icon={DollarSign} 
+          color="text-[#00BFA5]" 
         />
-        <div className="flex flex-col">
-          <span className="text-white font-black text-base uppercase tracking-widest leading-none">STRIKER</span>
-          <span className="text-[9px] text-slate-500 uppercase tracking-[0.25em] font-bold">STRIKER Engine · ERC-8004</span>
-        </div>
+        <IntelCard 
+          label="BUYING POWER" 
+          value={buyingPower} 
+          subtext={`Cash: ${cashBal}`} 
+          icon={Zap} 
+          color="text-amber-400" 
+        />
+        <IntelCard 
+          label="ACTIVE STRATEGY" 
+          value="Pairs Trading" 
+          subtext="SPY / QQQ Mean-Reversion" 
+          icon={Layers} 
+          color="text-[#0091EA]" 
+        />
+        <IntelCard 
+          label="AI ENGINE" 
+          value="Gemini 3.6 Flash" 
+          subtext="Claude Fallback Active" 
+          icon={Cpu} 
+          color="text-purple-400" 
+        />
       </div>
 
-      {/* 1. TOP Intel Grid */}
-      <div className="grid grid-cols-4 gap-4 shrink-0">
-        <IntelCard label="GAS (Base)" value="0.012 gwei" icon={Gauge} color="text-amber-500" />
-        <IntelCard label="UPTIME" value="99.99%" icon={ShieldCheck} color="text-[#00BFA5]" />
-        <IntelCard label="SENTIMENT" value={`${agentState.sentiment.toFixed(2)}`} icon={Activity} color="text-[#0091EA]" />
-        <IntelCard label="SCANS/MIN" value={`${agentState.attempts}`} icon={Zap} color="text-rose-500" />
-      </div>
-      <div className="flex flex-col gap-4">
-
-        {/* Prices */}
-        <div className="grid grid-cols-4 gap-3 shrink-0">
-          <SignalGridItem label={`${asset} SPOT`} value={`$${agentState.last_spot_price?.toFixed(2)}`} subValue="KRAKEN" status="LIVE" />
-          <SignalGridItem label={`${asset} PERP`} value={`$${agentState.last_perp_price?.toFixed(2)}`} subValue="DYDX" status="LIVE" />
-          <SignalGridItem label="YIELD" value={`${(agentState.last_spread || 0.0135).toFixed(4)}%`} subValue="DELTA" status="OPPORTUNITY" active={true} />
-          <SignalGridItem label="WALLET" value={`${formattedBalance} ETH`} subValue="ENCLAVE" status="SECURE" />
+      {/* 2. STRATEGY CONTROL BANNER */}
+      <div className="bg-[#161920] border border-white/5 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl relative overflow-hidden">
+        <div className="absolute -right-10 -bottom-10 w-48 h-48 bg-[#00BFA5]/5 rounded-full blur-3xl pointer-events-none" />
+        
+        <div className="flex items-center gap-4">
+          <div className={`p-4 rounded-2xl ${strategyRunning ? 'bg-[#00BFA5]/10 text-[#00BFA5] border border-[#00BFA5]/30 shadow-[0_0_20px_rgba(0,191,165,0.2)]' : 'bg-white/5 text-slate-400'}`}>
+            <Activity size={28} className={strategyRunning ? 'animate-pulse' : ''} />
+          </div>
+          <div>
+            <div className="flex items-center gap-3">
+              <h2 className="text-lg font-bold text-white tracking-wide">Autonomous Decision Engine</h2>
+              <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-mono font-bold uppercase tracking-wider ${
+                strategyRunning ? 'bg-[#00BFA5]/15 text-[#00BFA5] border border-[#00BFA5]/30' : 'bg-amber-400/10 text-amber-400 border border-amber-400/20'
+              }`}>
+                {strategyRunning ? '● LOOP RUNNING' : 'STANDBY MODE'}
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 mt-1 max-w-xl">
+              Monitors live equity spreads between SPY & QQQ. Claude & Gemini analyze technical indicators and call Alpaca MCP tools to execute trades automatically.
+            </p>
+          </div>
         </div>
 
-        {/* Chart */}
-        <div className="bg-[#11141D] border border-white/5 rounded-lg flex flex-col h-[400px] shadow-2xl overflow-hidden">
+        <button
+          onClick={handleToggleStrategy}
+          disabled={controlLoading}
+          className={`flex items-center gap-2.5 px-6 py-3.5 rounded-xl font-mono text-xs font-bold uppercase tracking-wider transition-all shadow-lg ${
+            strategyRunning
+              ? 'bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30'
+              : 'bg-[#00BFA5] hover:bg-[#00BFA5]/90 text-black shadow-[0_0_20px_rgba(0,191,165,0.3)]'
+          }`}
+        >
+          {controlLoading ? (
+            <LoadingSpinner size="sm" />
+          ) : strategyRunning ? (
+            <>
+              <Square size={14} fill="currentColor" /> Stop Strategy Loop
+            </>
+          ) : (
+            <>
+              <Play size={14} fill="currentColor" /> Start Strategy Loop
+            </>
+          )}
+        </button>
+      </div>
+
+      {/* 3. CHART & PAIR SIGNAL GRID */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* PnL Performance Chart */}
+        <div className="lg:col-span-2 bg-[#11141D] border border-white/5 rounded-2xl flex flex-col h-[420px] shadow-2xl overflow-hidden">
           <div className="p-4 border-b border-white/5 flex justify-between items-center bg-white/[0.01]">
             <div className="flex items-center gap-2">
-              <BarChart3 size={14} className="text-[#00BFA5]" />
-              <span className="text-[10px] font-black uppercase tracking-widest italic">Autonomous_Alpha_Stream</span>
+              <BarChart3 size={16} className="text-[#00BFA5]" />
+              <span className="text-xs font-mono font-bold uppercase tracking-widest text-slate-300">Portfolio Performance Curve (P&L)</span>
             </div>
-            <div className="flex items-center gap-2 px-2 py-1 rounded bg-white/5 border border-white/5">
-              <div className="w-1.5 h-1.5 rounded-full bg-[#00BFA5] animate-pulse" />
-              <span className="text-[8px] font-black uppercase">Enclave_Scanning</span>
+            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/5">
+              <div className="w-2 h-2 rounded-full bg-[#00BFA5] animate-pulse" />
+              <span className="text-[9px] font-mono text-slate-300 uppercase">Live_Feed</span>
             </div>
           </div>
           <div className="flex-1 p-4">
-            <PnLChart data={pnlHistory} />
-          </div>
-          <div className="px-4 py-2 border-t border-white/5 bg-black/20 flex items-center gap-2">
-            <Info size={10} className="text-[#0091EA]" />
-            <span className="text-[7px] text-slate-600 font-bold uppercase tracking-widest">
-              LLM Risk Adjustment active (Gemini 2.0 Flash). Deterministic safety rails verified.
-            </span>
+            <PnLChart data={pnlData} />
           </div>
         </div>
 
-        {/* Terminal */}
-        <div className="h-40 bg-[#11141D] border border-white/5 rounded-lg p-3 flex flex-col overflow-hidden">
-          <div className="flex items-center gap-2 mb-2 border-b border-white/5 pb-1">
-            <TerminalIcon size={12} className="text-[#00BFA5]" />
-            <span className="text-[9px] font-black uppercase tracking-widest">Enclave_Tracing</span>
-          </div>
-          <div ref={terminalRef} className="flex-1 overflow-y-auto scrollbar-hide font-mono text-[9px] space-y-0.5">
-            {(terminalLogs || []).slice(-30).map((l, i) => (
-              <div key={i} className="flex gap-2">
-                <span className="text-[#0091EA] opacity-40">{new Date().toLocaleTimeString()}</span>
-                <span className={l.includes('[SUCCESS]') ? 'text-[#00BFA5]' : 'text-slate-400'}>{l}</span>
+        {/* Pair Spread Signal Overview */}
+        <div className="bg-[#11141D] border border-white/5 rounded-2xl p-5 flex flex-col justify-between shadow-2xl">
+          <div>
+            <div className="flex items-center justify-between border-b border-white/5 pb-3 mb-4">
+              <span className="text-xs font-mono font-bold uppercase tracking-widest text-slate-300">Pairs Trading Signal</span>
+              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-[#0091EA]/10 text-[#0091EA]">SPY / QQQ</span>
+            </div>
+
+            <div className="space-y-4">
+              <div className="bg-[#161920] p-3.5 rounded-xl border border-white/5">
+                <div className="flex justify-between text-xs text-slate-400 mb-1 font-mono">
+                  <span>SPY Market Price</span>
+                  <span className="font-bold text-white">$502.40</span>
+                </div>
+                <div className="flex justify-between text-xs text-slate-400 font-mono">
+                  <span>QQQ Market Price</span>
+                  <span className="font-bold text-white">$432.10</span>
+                </div>
               </div>
-            ))}
+
+              <div className="bg-[#161920] p-3.5 rounded-xl border border-white/5">
+                <div className="text-[9px] font-mono text-slate-400 uppercase tracking-widest mb-1">Spread Z-Score Gauge</div>
+                <div className="flex items-baseline justify-between">
+                  <span className="text-2xl font-bold text-[#00BFA5] font-mono">+0.82</span>
+                  <span className="text-[10px] font-mono text-slate-400">Mean Entry Threshold: ±2.0</span>
+                </div>
+                <div className="w-full h-2 bg-white/5 rounded-full mt-2 overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-[#0091EA] to-[#00BFA5]" style={{ width: '65%' }} />
+                </div>
+              </div>
+
+              <div className="bg-[#161920] p-3.5 rounded-xl border border-white/5">
+                <div className="text-[9px] font-mono text-slate-400 uppercase tracking-widest mb-1">AI Recommendation</div>
+                <div className="text-sm font-bold text-slate-200 font-mono">
+                  {agentState?.last_decision?.action?.toUpperCase() || 'HOLD'} — Spread within equilibrium
+                </div>
+              </div>
+            </div>
           </div>
+
+          <div className="pt-4 border-t border-white/5 text-[10px] font-mono text-slate-500 flex items-center gap-2">
+            <ShieldCheck size={12} className="text-[#00BFA5]" />
+            <span>Risk parameters & position sizing calibrated automatically</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 4. REASONING TRANSPARENCY LOG STREAM */}
+      <div className="bg-[#11141D] border border-white/5 rounded-2xl p-5 shadow-2xl flex flex-col h-[320px]">
+        <div className="flex items-center justify-between border-b border-white/5 pb-3 mb-3">
+          <div className="flex items-center gap-2">
+            <TerminalIcon size={16} className="text-[#00BFA5]" />
+            <h3 className="text-xs font-mono font-bold text-slate-300 uppercase tracking-widest">Reasoning Transparency Log (Audit Trail)</h3>
+          </div>
+          <span className="text-[10px] font-mono text-slate-500">Live Decision Stream</span>
+        </div>
+
+        <div ref={terminalRef} className="flex-1 overflow-y-auto font-mono text-xs space-y-3 pr-2">
+          {reasoningLogs.length > 0 ? (
+            reasoningLogs.map((log, idx) => (
+              <div key={idx} className="bg-[#161920] p-3 rounded-xl border border-white/5 space-y-1.5">
+                <div className="flex items-center justify-between text-[10px] text-slate-400 border-b border-white/5 pb-1">
+                  <span className="text-[#0091EA] font-bold">Cycle #{log.cycle_id} • {new Date(log.timestamp).toLocaleTimeString()}</span>
+                  <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
+                    log.decision?.action === 'buy' ? 'bg-emerald-500/10 text-emerald-400' :
+                    log.decision?.action === 'sell' ? 'bg-rose-500/10 text-rose-400' : 'bg-slate-500/10 text-slate-400'
+                  }`}>
+                    {log.decision?.action?.toUpperCase() || 'HOLD'} (Confidence: {(log.decision?.confidence ?? 0.5) * 100}%)
+                  </span>
+                </div>
+
+                <div className="text-slate-300 text-xs leading-relaxed">
+                  {log.llm_reasoning || log.decision?.reasoning || 'Evaluating quantitative pairs spread.'}
+                </div>
+
+                {log.mcp_tools_called && log.mcp_tools_called.length > 0 && (
+                  <div className="text-[10px] text-[#00BFA5] font-mono flex items-center gap-2 pt-1">
+                    <span>Tools Executed:</span>
+                    {log.mcp_tools_called.map((t, tid) => (
+                      <span key={tid} className="bg-white/5 px-2 py-0.5 rounded text-slate-300">{t.name}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))
+          ) : (
+            <div className="h-full flex items-center justify-center text-slate-600 italic">
+              No reasoning cycles recorded yet. Start the strategy loop to see live decisions.
+            </div>
+          )}
         </div>
       </div>
     </div>

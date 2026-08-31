@@ -2,12 +2,11 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import Layout from './components/layout/Layout';
 import { ToastProvider } from './components/ui/Toast';
-import LandingPage       from './pages/LandingPage';
-import DashboardPage     from './pages/DashboardPage';
-
-const LiveStreamStub = () => <div className="p-8 text-white">Live Stream Component</div>;
-const PositionsStub = () => <div className="p-8 text-white">Positions Component</div>;
-const AILogsStub = () => <div className="p-8 text-white">AI Logs Component</div>;
+import LandingPage from './pages/LandingPage';
+import DashboardPage from './pages/DashboardPage';
+import ReasoningLogPage from './pages/ReasoningLogPage';
+import PositionsPage from './pages/PositionsPage';
+import ChatPage from './pages/ChatPage';
 
 export default function App() {
   return (
@@ -15,7 +14,7 @@ export default function App() {
       <Toaster position="bottom-right" theme="dark" expand={true} richColors />
       <ToastProvider>
         <Routes>
-          {/* Landing page: no Navbar/Layout wrapper */}
+          {/* Landing page */}
           <Route
             path="/"
             element={
@@ -26,17 +25,18 @@ export default function App() {
             }
           />
 
-          {/* App shell with Navbar */}
+          {/* App shell with Navbar Layout */}
           <Route
             path="/*"
             element={
               <Layout>
                 <Routes>
-                  <Route path="/dashboard"  element={<DashboardPage />} />
-                  <Route path="/stream"     element={<LiveStreamStub />} />
-                  <Route path="/positions"  element={<PositionsStub />} />
-                  <Route path="/logs"       element={<AILogsStub />} />
-                  <Route path="*"           element={<DashboardPage />} />
+                  <Route path="/dashboard" element={<DashboardPage />} />
+                  <Route path="/logs font" element={<ReasoningLogPage />} />
+                  <Route path="/logs" element={<ReasoningLogPage />} />
+                  <Route path="/positions" element={<PositionsPage />} />
+                  <Route path="/chat" element={<ChatPage />} />
+                  <Route path="*" element={<DashboardPage />} />
                 </Routes>
               </Layout>
             }
