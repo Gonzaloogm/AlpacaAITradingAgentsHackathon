@@ -261,7 +261,7 @@ class AlpacaMCPClient:
             timeframe: '1Min', '5Min', '15Min', '1H', '1D'.
         """
         return await self.call_tool(
-            "get_account_portfolio_history",
+            "get_portfolio_history",
             {"period": period, "timeframe": timeframe},
         )
 
@@ -271,7 +271,7 @@ class AlpacaMCPClient:
 
     async def get_positions(self) -> List[Dict[str, Any]]:
         """Fetch all open portfolio positions."""
-        result = await self.call_tool("get_all_open_positions", {})
+        result = await self.call_tool("get_all_positions", {})
         if isinstance(result, list):
             return result
         return [result] if result else []
@@ -310,7 +310,7 @@ class AlpacaMCPClient:
         args: Dict[str, Any] = {"status": status, "limit": limit}
         if symbol:
             args["symbols"] = symbol
-        result = await self.call_tool("get_all_orders", args)
+        result = await self.call_tool("get_orders", args)
         if isinstance(result, list):
             return result
         return [result] if result else []

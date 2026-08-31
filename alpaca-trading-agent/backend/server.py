@@ -343,9 +343,9 @@ async def _run_strategy_loop(strategy_name: str) -> None:
             market_data: Dict[str, Any] = {}
             if alpaca_client and getattr(alpaca_client, "is_connected", False):
                 try:
-                    snap_a = await alpaca_client.call_tool("get_stock_snapshot", {"symbol": "SPY"})
-                    snap_b = await alpaca_client.call_tool("get_stock_snapshot", {"symbol": "QQQ"})
-                    market_data = {"SPY": snap_a, "QQQ": snap_b}
+                    data_spy = await alpaca_client.get_market_data("SPY")
+                    data_qqq = await alpaca_client.get_market_data("QQQ")
+                    market_data = {"SPY": data_spy.get("snapshot", data_spy), "QQQ": data_qqq.get("snapshot", data_qqq)}
                 except Exception as err:
                     logger.warning("Could not fetch real snapshot via MCP: %s", err)
 

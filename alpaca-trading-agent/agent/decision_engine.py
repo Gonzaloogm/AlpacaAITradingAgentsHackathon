@@ -256,58 +256,59 @@ class DecisionEngine:
     # ── Gemini: analyze_market ────────────────────────────────────────────────
 
     async def _analyze_market_gemini(self, prompt: str) -> Dict[str, Any]:
-        """Send a market-analysis prompt to Gemini and return a parsed decision dict.
-
-        Args:
-            prompt: The structured text prompt (already built by analyze_market).
-
-        Returns:
-            Decision dict with keys: action, confidence, reasoning, parameters.
-        """
+        """Send a market-analysis prompt to Gemini and return a parsed decision dict."""
         gemini_client = self._get_gemini_client()
         if gemini_client is None:
-            return _error_decision("Gemini client not initialised (check GEMINI_API_KEY).")
-
-        await self._gemini_rate_limit_wait()
+            return _error_decision("Gemini client not initialised (check GEMINI_API_KEY).", provider="gemini")
 
         try:
             from google.genai import types as genai_types  # noqa: PLC0415
 
-            full_prompt = f"{self.system_prompt}\n\n{prompt}"
-            self._gemini_record_call()
-            response = await gemini_client.aio.models.generate_content(
-                model=self.gemini_model,
-                contents=full_prompt,
-                config=genai_types.GenerateContentConfig(
-                    temperature=0.2,
-                    max_output_tokens=1024,
-                    # No grounding/search — stays on free tier
-                ),
-            )
+            full_prompt = f"{self.system_prompt}\n\n{prompt}\nCRITICAL: OUTPUT MUST BE A SINGLE VALID JSON OBJECT ONLY. NO MARKDOWN, NO CODE BLOCKS, NO EXPLANATORY TEXT."
+            
+            for attempt in range(2):
+                await self._gemini_rate_limit_wait()
+                self._gemini_record_call()
+                
+                response = await gemini_client.aio.models.generate_content(
+                    model=self.gemini_model,
+                    contents=full_prompt,
+                    config=genai_types.GenerateContentConfig(
+                        temperature=0.2,
+                        max_output_tokens=2048,
+                        response_mime_type="application/json",
+                    ),
+                )
 
-            raw_text: str = response.text or ""
-            decision = _parse_json_decision(raw_text)
-            logger.info("Gemini analyze_market: success (provider=gemini).")
-            return decision
+                raw_text: str = response.text or ""
+                decision = _parse_json_decision(raw_text)
+                
+                if decision.get("action") == "hold" and "JSON parse error" in decision.get("reasoning", ""):
+                    if attempt == 0:
+                        logger.warning("Gemini returned malformed JSON, retrying once. raw: %s", raw_text[:200])
+                        full_prompt += "\nYOUR PREVIOUS RESPONSE WAS INVALID JSON. PLEASE FIX THE FORMATTING AND RETURN ONLY VALID JSON."
+                        continue
+                    else:
+                        decision["reasoning"] = f"Gemini returned malformed JSON, could not parse decision — raw response logged. Error: {decision['reasoning']}"
+                        decision["provider"] = "gemini"
+                        return decision
+                
+                logger.info("Gemini analyze_market: success (provider=gemini).")
+                decision["provider"] = "gemini"
+                return decision
 
         except Exception as err:
             if _is_gemini_quota_error(err):
-                # SAFETY: log and stop — do NOT retry (would burn daily quota)
                 logger.error(
-                    "GEMINI QUOTA EXCEEDED — stopping. Error: %s\n"
-                    "Free tier: %d req/day, resets at midnight PT (08:00 UTC).\n"
-                    "Do NOT retry automatically. Wait for quota reset or reduce call frequency.",
-                    err,
-                    GEMINI_FREE_RPD,
+                    "GEMINI QUOTA EXCEEDED — stopping. Error: %s\n", err
                 )
                 return _error_decision(
-                    f"Gemini quota exceeded (free tier: {GEMINI_FREE_RPD} req/day). "
-                    "Stopping to avoid burning remaining quota. "
-                    "Wait for reset at midnight PT.",
+                    f"Gemini quota exceeded (free tier: {GEMINI_FREE_RPD} req/day).",
+                    provider="gemini",
                     quota_exceeded=True,
                 )
             logger.error("Gemini API error in analyze_market: %s", err)
-            return _error_decision(f"Gemini API error: {err}")
+            return _error_decision(f"Gemini API error: {err}", provider="gemini")
 
     # ── Gemini: chat ──────────────────────────────────────────────────────────
 

@@ -1,119 +1,57 @@
-import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Shield, Zap, Lock, ChevronRight, Activity } from 'lucide-react';
-
-const FEATURES = [
-  {
-    icon: <Shield size={20} className="text-[#00BFA5]" />,
-    title: 'TEE Attestation',
-    desc: 'Intel TDX hardware isolation. Every trade is cryptographically attested and verifiable on-chain.',
-  },
-  {
-    icon: <Zap size={20} className="text-[#0091EA]" />,
-    title: 'AI Decision Engine',
-    desc: 'Gemini-powered LLM sets dynamic spread thresholds in real time, adapting to market volatility.',
-  },
-  {
-    icon: <Lock size={20} className="text-amber-400" />,
-    title: 'Delta-Neutral Strategy',
-    desc: 'Cash-and-carry arbitrage between spot and perpetual markets. Zero directional exposure.',
-  },
-  {
-    icon: <Activity size={20} className="text-violet-400" />,
-    title: 'ERC-8004 Identity',
-    desc: 'On-chain agent registration with reputation scoring. Fully compliant with the ERC-8004 standard.',
-  },
-];
+import { ArrowRight, Activity, Cpu, ShieldCheck } from 'lucide-react';
 
 export default function LandingPage() {
   const navigate = useNavigate();
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    const t = setTimeout(() => setVisible(true), 80);
-    return () => clearTimeout(t);
-  }, []);
 
   return (
-    <div className="relative min-h-screen overflow-hidden">
+    <div className="min-h-screen flex flex-col items-center justify-center p-6 font-sans bg-[#0D0F14]">
+      <div className="max-w-3xl text-center space-y-8">
+        <div className="inline-flex items-center justify-center p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400 mb-4 shadow-lg shadow-blue-500/10">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 21L10 12L14 16L21 5" />
+            <path d="M16 5h5v5" />
+            <circle cx="10" cy="12" r="1.5" fill="currentColor"/>
+          </svg>
+        </div>
+        
+        <h1 className="text-6xl md:text-7xl font-black text-white tracking-tighter">
+          Vantage
+        </h1>
+        <p className="text-xl md:text-2xl text-slate-400 font-medium tracking-wide">
+          Your AI Trader
+        </p>
 
-
-
-      {/* Ambient glow blobs */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[700px] h-[700px] rounded-full bg-[#0091EA]/5 blur-[120px]" />
-        <div className="absolute bottom-0 right-0 w-[400px] h-[400px] rounded-full bg-[#00BFA5]/5 blur-[100px]" />
-      </div>
-
-      {/* ── HERO (centrado) ── */}
-      <div
-        className={`relative z-10 flex flex-col items-center justify-center min-h-screen px-6 pb-32 transition-all duration-700 ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
-          }`}
-      >
-        <div className="flex flex-col items-center text-center max-w-3xl w-full">
-
-          {/* Badge */}
-          <div className="mb-6 flex items-center gap-2 px-4 py-1.5 bg-[#00BFA5]/10 border border-[#00BFA5]/20 rounded-full">
-            <div className="w-1.5 h-1.5 rounded-full bg-[#00BFA5] animate-pulse shadow-[0_0_6px_#00BFA5]" />
-            <span className="text-[9px] font-black text-[#00BFA5] uppercase tracking-[0.3em]">
-              ERC-8004 · Intel TDX · Base Sepolia
-            </span>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-8 pb-12 text-left">
+          <div className="p-6 rounded-2xl bg-[#12141C] border border-white/5">
+            <Cpu className="text-blue-500 mb-4" size={24} />
+            <h3 className="text-white font-bold mb-2">AI Decision Engine</h3>
+            <p className="text-sm text-slate-500">Powered by Google Gemini and Anthropic Claude for intelligent market analysis.</p>
           </div>
-
-          {/* Headline */}
-          <h1 className="text-5xl sm:text-6xl font-black tracking-tight text-white mb-4 leading-[1.05]">
-            <span className="bg-gradient-to-r from-white via-white to-slate-400 bg-clip-text text-transparent">
-              STRIKER
-            </span>
-            <br />
-            <span className="text-2xl sm:text-3xl font-bold text-slate-400 tracking-wide">
-              STRIKER - Verified Autonomous Trading
-            </span>
-          </h1>
-
-          {/* Description */}
-          <p className="text-slate-400 text-base leading-relaxed max-w-xl mb-10">
-            A TEE-secured, AI-driven delta-neutral trading agent with on-chain identity and reputation.
-            Every decision signed inside an Intel TDX enclave. Every trade attested on Base Sepolia.
-          </p>
-
-          {/* CTA BUTTON */}
-          <button
-            id="enter-dashboard-btn"
-            onClick={() => navigate('/dashboard')}
-            className="group flex items-center gap-3 px-10 py-4 bg-gradient-to-r from-[#0091EA] to-[#00BFA5] hover:from-[#0080cc] hover:to-[#00a88e] text-white font-bold text-sm uppercase tracking-widest rounded-xl shadow-lg shadow-cyan-500/20 transition-all duration-300 active:scale-95 hover:shadow-cyan-400/30 hover:shadow-xl"
-          >
-            Enter the Enclave
-            <ChevronRight
-              size={18}
-              className="transition-transform duration-300 group-hover:translate-x-1"
-            />
-          </button>
-
-          <p className="mt-4 text-[10px] text-slate-600 uppercase tracking-widest">
-            Hackathon Demo · LabLab ERC-8004 Challenge
-          </p>
+          <div className="p-6 rounded-2xl bg-[#12141C] border border-white/5">
+            <Activity className="text-emerald-500 mb-4" size={24} />
+            <h3 className="text-white font-bold mb-2">Pairs Trading Strategy</h3>
+            <p className="text-sm text-slate-500">An AI-driven pairs trading agent executing live on Alpaca.</p>
+          </div>
+          <div className="p-6 rounded-2xl bg-[#12141C] border border-white/5">
+            <ShieldCheck className="text-amber-500 mb-4" size={24} />
+            <h3 className="text-white font-bold mb-2">MCP Integration</h3>
+            <p className="text-sm text-slate-500">Using the Model Context Protocol (MCP) to seamlessly interact with Alpaca trading APIs.</p>
+          </div>
         </div>
 
-        {/* ── FEATURE CARDS ── */}
-        <div className="mt-20 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 w-full max-w-5xl">
-          {FEATURES.map((f, i) => (
-            <div
-              key={i}
-              className="dashboard-card p-6 flex flex-col gap-3 hover:border-white/10 transition-all duration-300"
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-white/5 rounded-lg">{f.icon}</div>
-                <span className="text-xs font-bold text-white uppercase tracking-widest">{f.title}</span>
-              </div>
-              <p className="text-[11px] text-slate-500 leading-relaxed">{f.desc}</p>
-            </div>
-          ))}
+        <button
+          onClick={() => navigate('/dashboard')}
+          className="group inline-flex items-center gap-3 px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-full font-bold text-lg transition-all shadow-[0_8px_30px_rgb(37,99,235,0.4)] hover:shadow-[0_8px_40px_rgb(37,99,235,0.6)]"
+        >
+          Enter Dashboard
+          <ArrowRight className="group-hover:translate-x-1 transition-transform" />
+        </button>
+
+        <div className="pt-12 text-xs font-mono font-bold text-slate-600 uppercase tracking-widest">
+          Hackathon Demo · Alpaca AI Trading
         </div>
       </div>
-
-      {/* Bottom fade */}
-      <div className="pointer-events-none fixed bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-[#0D0F14] to-transparent" />
     </div>
   );
 }

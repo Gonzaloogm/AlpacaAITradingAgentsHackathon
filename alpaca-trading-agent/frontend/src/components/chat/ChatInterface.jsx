@@ -1,48 +1,34 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { apiClient } from '../../api/client';
-import MessageBubble from './MessageBubble';
-import QuickActions from './QuickActions';
 import LoadingSpinner from '../ui/LoadingSpinner';
-import { useToast } from '../ui/Toast';
+import { Bot, User, Send, RefreshCw } from 'lucide-react';
 
-const SESSION_KEY = 'tee_agent_session_id';
-
-function getOrCreateSession() {
-  let id = localStorage.getItem(SESSION_KEY);
-  if (!id) {
-    id = crypto.randomUUID();
-    localStorage.setItem(SESSION_KEY, id);
-  }
-  return id;
-}
+const SESSION_KEY = 'vantage_agent_session_id';
 
 const GREETING = {
   role: 'assistant',
-  content: `### TEE Agent Auditor V1.0 Connected\n\nI am the autonomous supervisor of the AGENT-4108-TDX strategy. You can audit my enclave state by asking about:\n- **Hardware Security**: "What is your attestation status?"\n- **Trading Logic**: "Explain your Delta-Neutral strategy."\n- **Portfolio Audit**: "Show me your current equity and realized gains."\n\nI am currently running inside a **SECURED INTEL TDX ENCLAVE**.`,
+  content: `Hello! I am Vantage, your AI trading assistant. 
+You can ask me to analyze your portfolio, review open positions, or explain current market strategies.
+*Example: "What are my current positions?" or "Explain your reasoning for the latest SPY/QQQ trade."*`,
 };
 
 export default function ChatInterface() {
-  const [messages, setMessages]     = useState([GREETING]);
-  const [input, setInput]           = useState('');
-  const [loading, setLoading]       = useState(false);
-  const [sessionId, setSessionId]   = useState(getOrCreateSession);
-  const bottomRef                   = useRef(null);
-  const textareaRef                 = useRef(null);
-  const toast                       = useToast();
-
-  // ... (rest of the logic remains the same, but I'll update the render part below)
-  // [NOTE: I'll skip to the return block to save tokens but keeping logic intact]
+  const [messages, setMessages] = useState([GREETING]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [sessionId, setSessionId] = useState(() => {
+    return localStorage.getItem(SESSION_KEY) || crypto.randomUUID();
+  });
   
-  // Load history on mount
+  const bottomRef = useRef(null);
+  const inputRef = useRef(null);
+
   useEffect(() => {
+    localStorage.setItem(SESSION_KEY, sessionId);
     (async () => {
       const result = await apiClient.getChatHistory(sessionId);
-      if (result.success && result.data.messages?.length > 0) {
-        setMessages(result.data.messages.map(m => ({
-          role:      m.role,
-          content:   m.content,
-          toolCalls: m.tool_calls,
-        })));
+      if (result.success && result.data.history?.length > 0) {
+        setMessages(result.data.history);
       }
     })();
   }, [sessionId]);
@@ -51,138 +37,89 @@ export default function ChatInterface() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const addMessage = useCallback((msg) => {
-    setMessages(prev => prev.filter(m => m.role !== 'typing').concat(msg));
-  }, []);
-
-  const showTyping = useCallback(() => {
-    setMessages(prev => [...prev, { role: 'typing', content: '' }]);
-  }, []);
-
-  const sendMessage = useCallback(async (text) => {
-    if (!text.trim() || loading) return;
+  const sendMessage = async () => {
+    if (!input.trim() || loading) return;
+    const text = input;
     setInput('');
-    textareaRef.current && (textareaRef.current.style.height = 'auto');
-    addMessage({ role: 'user', content: text });
-    showTyping();
+    setMessages(prev => [...prev, { role: 'user', content: text }]);
     setLoading(true);
 
     const result = await apiClient.sendChatMessage(sessionId, text);
-
     if (result.success) {
       if (result.data.session_id && result.data.session_id !== sessionId) {
         setSessionId(result.data.session_id);
-        localStorage.setItem(SESSION_KEY, result.data.session_id);
       }
-      addMessage({
-        role: 'assistant',
-        content: result.data.response,
-        toolCalls: result.data.tool_calls,
-      });
+      setMessages(prev => [...prev, { role: 'assistant', content: result.data.response }]);
     } else {
-      addMessage({ role: 'assistant', content: `⚠️ Error: ${result.error}\n\nPlease try again.` });
-      toast(result.error, 'error');
+      setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${result.error}` }]);
     }
     setLoading(false);
-  }, [loading, sessionId, addMessage, showTyping, toast]);
+    setTimeout(() => inputRef.current?.focus(), 100);
+  };
 
-  const handleQuickAction = useCallback(async (tool, label) => {
-    if (loading) return;
-    addMessage({ role: 'user', content: `[Quick Action: ${label}]` });
-    showTyping();
-    setLoading(true);
-
-    const result = await apiClient.quickAction(sessionId, tool);
-    if (result.success) {
-      addMessage({ role: 'assistant', content: result.data.response, toolCalls: result.data.tool_calls });
-    } else {
-      addMessage({ role: 'assistant', content: `⚠️ Error: ${result.error}` });
-    }
-    setLoading(false);
-  }, [loading, sessionId, addMessage, showTyping]);
-
-  const handleNewSession = async () => {
+  const handleReset = async () => {
     const result = await apiClient.newChatSession();
     if (result.success) {
-      const newId = result.data.session_id;
-      setSessionId(newId);
-      localStorage.setItem(SESSION_KEY, newId);
+      setSessionId(result.data.session_id);
       setMessages([GREETING]);
-      toast('Audit session cleared', 'success');
     }
-  };
-
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage(input);
-    }
-  };
-
-  const handleInputChange = (e) => {
-    setInput(e.target.value);
-    e.target.style.height = 'auto';
-    e.target.style.height = Math.min(e.target.scrollHeight, 160) + 'px';
   };
 
   return (
-    <div className="bg-black/60 border border-white/5 rounded-[2.5rem] flex flex-col h-[450px] overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-8 py-4 border-b border-white/[0.06] bg-white/[0.02]">
+    <div className="bg-[#12141C] border border-white/5 rounded-2xl flex flex-col h-[600px] shadow-lg overflow-hidden font-sans">
+      <div className="flex justify-between items-center p-4 border-b border-white/5 bg-white/[0.01]">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">🛡️</div>
+          <div className="p-2 rounded bg-blue-500/10 text-blue-400"><Bot size={18} /></div>
           <div>
-            <p className="text-xs font-black text-white uppercase tracking-widest">Agent Auditor V1.0</p>
-            <p className="text-[10px] text-emerald-500/60 font-mono uppercase">Internal Integrity Stream</p>
+            <h3 className="text-sm font-bold text-white tracking-wide">Vantage Assistant</h3>
+            <p className="text-[10px] text-slate-500 font-mono uppercase tracking-widest">Powered by Gemini</p>
           </div>
         </div>
-        <button
-          onClick={handleNewSession}
-          className="text-[10px] px-3 py-1 rounded-lg border border-white/10 text-gray-500 hover:text-white hover:bg-white/5 transition-all font-mono uppercase"
-        >
-          Reset Logs
+        <button onClick={handleReset} className="p-2 text-slate-500 hover:text-white hover:bg-white/5 rounded-lg transition-colors">
+          <RefreshCw size={16} />
         </button>
       </div>
 
-      {/* Messages */}
-      <div className="chat-messages flex-1 overflow-y-auto px-8 py-6 space-y-6 font-sans">
-        {messages.map((msg, i) =>
-          msg.role === 'typing' ? (
-            <div key="typing" className="flex gap-4 animate-fadein">
-              <div className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center bg-gray-900 border border-white/10 text-xs">🤖</div>
-              <div className="rounded-2xl rounded-tl-sm px-5 py-3 bg-white/[0.02] border border-white/[0.04] flex items-center gap-2">
-                <LoadingSpinner size="sm" color="emerald" />
-                <span className="text-[11px] text-gray-500 font-mono">AUDITING ENCLAVE...</span>
-              </div>
+      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        {messages.map((msg, i) => (
+          <div key={i} className={`flex gap-4 max-w-[85%] ${msg.role === 'user' ? 'ml-auto flex-row-reverse' : ''}`}>
+            <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center ${msg.role === 'user' ? 'bg-slate-700 text-white' : 'bg-blue-600 text-white'}`}>
+              {msg.role === 'user' ? <User size={14} /> : <Bot size={14} />}
             </div>
-          ) : (
-            <MessageBubble key={i} message={msg} />
-          )
+            <div className={`px-5 py-3.5 rounded-2xl text-sm leading-relaxed shadow-sm ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-tr-sm' : 'bg-white/[0.03] border border-white/5 text-slate-200 rounded-tl-sm'}`}>
+              <div className="whitespace-pre-wrap">{msg.content}</div>
+            </div>
+          </div>
+        ))}
+        {loading && (
+          <div className="flex gap-4 max-w-[85%]">
+            <div className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center bg-blue-600 text-white"><Bot size={14} /></div>
+            <div className="px-5 py-3.5 rounded-2xl rounded-tl-sm bg-white/[0.03] border border-white/5 flex items-center gap-2">
+              <LoadingSpinner size="sm" /> <span className="text-xs font-mono text-slate-500 uppercase tracking-widest">Thinking...</span>
+            </div>
+          </div>
         )}
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
-      <div className="px-8 pb-8 pt-4">
-        <div className="flex items-end gap-3 bg-white/[0.02] border border-white/10 rounded-2xl px-6 py-3 focus-within:border-emerald-500/40 transition-all">
-          <textarea
-            ref={textareaRef}
+      <div className="p-4 bg-white/[0.01] border-t border-white/5">
+        <div className="flex items-center gap-2 bg-black/20 border border-white/10 rounded-xl p-1 pr-2 focus-within:border-blue-500/50 transition-colors shadow-inner">
+          <input
+            ref={inputRef}
+            type="text"
             value={input}
-            onChange={handleInputChange}
-            onKeyDown={handleKeyDown}
-            placeholder="Pregunta al agente sobre su estado de seguridad o balance de trading..."
-            rows={1}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && sendMessage()}
             disabled={loading}
-            className="flex-1 bg-transparent resize-none text-[13px] text-gray-300 placeholder-gray-700 outline-none font-sans py-1 leading-relaxed disabled:opacity-50"
-            style={{ maxHeight: '100px' }}
+            placeholder="Ask Vantage about your portfolio or strategy..."
+            className="flex-1 bg-transparent px-4 py-2.5 text-sm text-white placeholder-slate-500 outline-none disabled:opacity-50"
           />
           <button
-            onClick={() => sendMessage(input)}
+            onClick={sendMessage}
             disabled={loading || !input.trim()}
-            className="flex-shrink-0 w-8 h-8 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400
-              hover:bg-emerald-500/20 disabled:opacity-10 transition-all flex items-center justify-center"
+            className="p-2.5 rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-30 transition-all"
           >
-            {loading ? <LoadingSpinner size="sm" /> : '→'}
+            <Send size={16} />
           </button>
         </div>
       </div>

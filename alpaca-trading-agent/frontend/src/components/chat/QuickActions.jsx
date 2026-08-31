@@ -1,7 +1,7 @@
 const QUICK_ACTIONS = [
   { tool: 'get_wallet_info',        icon: '💰', label: 'Wallet Info' },
   { tool: 'get_agent_card',         icon: '📋', label: 'Agent Card' },
-  { tool: 'generate_attestation',   icon: '🔐', label: 'Attestation' },
+  { tool: 'check_positions',   icon: '🔐', label: 'Positions' },
   { tool: 'get_registration_status',icon: '📝', label: 'Registration' },
   { tool: 'get_reputation',         icon: '⭐', label: 'Reputation' },
 ];

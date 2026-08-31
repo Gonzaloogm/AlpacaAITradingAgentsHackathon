@@ -1,5 +1,5 @@
 /**
- * API Client for APEX — Alpaca AI Trading Agent backend
+ * API Client for Vantage — Alpaca AI Trading Agent backend
  */
 export class APIClient {
   constructor() {
