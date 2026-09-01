@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: alpaca-agent-backend
+    env: docker
+    dockerContext: .
+    dockerfilePath: ./backend/Dockerfile
+    plan: free
+    envVars:
+      - key: ALPACA_API_KEY
+        sync: false
+      - key: ALPACA_SECRET_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+    # Optional health check
+    healthCheckPath: /health
+
+  - type: web
+    name: alpaca-agent-frontend
+    env: docker
+    dockerContext: ./frontend
+    dockerfilePath: ./Dockerfile
+    plan: free
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: alpaca-agent-backend
+          envVarKey: RENDER_EXTERNAL_URL

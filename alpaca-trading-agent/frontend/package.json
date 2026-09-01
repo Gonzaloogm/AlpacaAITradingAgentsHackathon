@@ -9,6 +9,10 @@
     "lint": "eslint .",
     "preview": "vite preview"
   },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+
   "dependencies": {
     "@tailwindcss/vite": "^4.2.2",
     "lucide-react": "^1.7.0",
