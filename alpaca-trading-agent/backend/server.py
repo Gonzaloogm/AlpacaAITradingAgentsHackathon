@@ -413,17 +413,15 @@ async def _run_strategy_loop(strategy_name: str) -> None:
                 try:
                     data_spy = await alpaca_client.get_market_data("SPY")
                     data_qqq = await alpaca_client.get_market_data("QQQ")
-                    market_data = {"SPY": data_spy.get("snapshot", data_spy), "QQQ": data_qqq.get("snapshot", data_qqq)}
+                    # Pass the full object (which includes snapshot and bars) so the strategy can extract prices
+                    market_data = {"SPY": data_spy, "QQQ": data_qqq}
                 except Exception as err:
                     logger.warning("Could not fetch real snapshot via MCP: %s", err)
 
             if not market_data:
-                # Generate synthetic mock price data for strategy analysis if offline
-                import random
-                market_data = {
-                    "SPY": [500.0 + random.uniform(-2, 2) for _ in range(20)],
-                    "QQQ": [430.0 + random.uniform(-2, 2) for _ in range(20)],
-                }
+                logger.warning("No market data retrieved from MCP. Skipping strategy cycle.")
+                await asyncio.sleep(30)
+                continue
 
             # 2. Compute quantitative signal
             signal = {}

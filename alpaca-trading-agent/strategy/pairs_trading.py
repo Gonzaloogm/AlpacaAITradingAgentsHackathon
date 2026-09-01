@@ -74,6 +74,20 @@ class PairsTradingStrategy(BaseStrategy):
         if not raw:
             return []
 
+        # If raw is the MCP get_market_data payload dict
+        if isinstance(raw, dict) and "bars" in raw:
+            bars_dict = raw["bars"]
+            if isinstance(bars_dict, dict) and symbol in bars_dict:
+                raw = bars_dict[symbol]
+            elif isinstance(bars_dict, dict) and "bars" in bars_dict and symbol in bars_dict["bars"]:
+                raw = bars_dict["bars"][symbol]
+            elif isinstance(bars_dict, list):
+                raw = bars_dict
+        
+        # If raw is nested dailyBar object (e.g. from snapshot)
+        if isinstance(raw, dict) and symbol in raw and "dailyBar" in raw[symbol]:
+            raw = [raw[symbol]["dailyBar"]]
+
         prices = []
         for item in raw:
             if isinstance(item, (int, float)):

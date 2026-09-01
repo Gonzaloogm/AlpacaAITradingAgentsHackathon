@@ -415,9 +415,13 @@ class AlpacaMCPClient:
             Dict with 'snapshot', 'bars', and 'symbol' keys.
         """
         snapshot = await self.call_tool("get_stock_snapshot", {"symbols": symbol})
+        
+        # Determine how many calendar days to request based on timeframe to ensure we hit the limit
+        days_to_request = limit * 2 if "Day" in timeframe else 5
+        
         bars = await self.call_tool(
             "get_stock_bars",
-            {"symbols": symbol, "timeframe": timeframe, "limit": limit},
+            {"symbols": symbol, "timeframe": timeframe, "limit": limit, "days": days_to_request},
         )
         return {"snapshot": snapshot, "bars": bars, "symbol": symbol}
 

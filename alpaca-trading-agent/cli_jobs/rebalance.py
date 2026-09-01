@@ -178,7 +178,7 @@ class EODRebalancer:
 
         return orders
 
-    async def run(self) -> Dict[str, Any]:
+    async def run(self, dry_run: bool = False) -> Dict[str, Any]:
         """
         Execute end-of-day portfolio rebalancing.
 
@@ -187,10 +187,13 @@ class EODRebalancer:
         2. Calculate difference between current allocations and target weights.
         3. Submit buy/sell orders via `alpaca order submit`.
 
+        Args:
+            dry_run: If True, do not actually submit orders.
+
         Returns:
             Dict[str, Any]: Summary dictionary containing execution status, calculated orders, and order response data.
         """
-        logger.info("Starting EOD portfolio rebalance run...")
+        logger.info("Starting EOD portfolio rebalance run... (dry_run=%s)", dry_run)
 
         # 1. Fetch current positions via CLI
         pos_res = await asyncio.to_thread(self._run_cli, ["position", "list"])
@@ -236,6 +239,11 @@ class EODRebalancer:
         failed_orders: List[Dict[str, Any]] = []
 
         for order in orders_to_submit:
+            if dry_run:
+                logger.info("DRY RUN: Would submit order: %s", order)
+                submitted_orders.append({"order": order, "response": {"status": "dry_run"}})
+                continue
+
             cmd_args = [
                 "order",
                 "submit",
