@@ -42,6 +42,37 @@ from mcp_client.config import (
 logger = logging.getLogger(__name__)
 
 
+def _unwrap_result(parsed: Any) -> Any:
+    """Unwrap the ``[{"result": [...]}]`` envelope that Alpaca MCP sometimes emits.
+
+    The Alpaca MCP server occasionally wraps tool results as a single-element
+    list whose only item is a dict with a ``"result"`` key holding the actual
+    payload.  Unwrapping here keeps every higher-level caller clean.
+
+    Examples::
+
+        [{"result": [{...}, {...}]}]  →  [{...}, {...}]
+        {"result": [{...}]}           →  [{...}]
+        [{"result": {...}}]           →  {...}
+        anything else                 →  unchanged
+    """
+    # Pattern A: list wrapper  →  [{"result": <payload>}]
+    if (
+        isinstance(parsed, list)
+        and len(parsed) == 1
+        and isinstance(parsed[0], dict)
+        and "result" in parsed[0]
+        and len(parsed[0]) == 1  # only key is "result" — unambiguous wrapper
+    ):
+        return parsed[0]["result"]
+
+    # Pattern B: bare dict wrapper  →  {"result": <payload>}
+    if isinstance(parsed, dict) and "result" in parsed and len(parsed) == 1:
+        return parsed["result"]
+
+    return parsed
+
+
 def _extract_text(content: Any) -> Any:
     """Pull plain data out of an MCP tool-call result content block list.
 
@@ -63,7 +94,8 @@ def _extract_text(content: Any) -> Any:
         # Unwrap Alpaca MCP v2 security envelope if present
         if isinstance(parsed, dict) and "_alpaca_mcp_security" in parsed and "data" in parsed:
             return parsed["data"]
-        return parsed
+        # Unwrap [{"result": [...]}] wrapper that Alpaca MCP sometimes emits
+        return _unwrap_result(parsed)
     except (json.JSONDecodeError, TypeError):
         return combined
 

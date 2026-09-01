@@ -24,8 +24,14 @@ from typing import Any, Dict, List, Optional
 # Executable command for launching the Alpaca MCP server via uvx
 MCP_SERVER_COMMAND: str = "uvx"
 
-# Default command-line arguments for the MCP server invocation
-MCP_SERVER_ARGS: List[str] = ["alpaca-mcp-server"]
+# Pin fastmcp<4.0.0 to work around a breaking change in fastmcp 4.0.0 that
+# removed `fastmcp.tools.tool` (ToolResult moved to `fastmcp.tools.base`).
+# alpaca-mcp-server 2.3.x still imports from the old path and will crash at
+# startup with fastmcp>=4.0.0.  Remove this pin once alpaca-mcp-server ships
+# a version that declares `fastmcp>=4.0.0` in its own requirements.
+#
+# Tracking issue: https://github.com/alpacahq/alpaca-mcp-server (watch for 2.4+)
+MCP_SERVER_ARGS: List[str] = ["--with", "fastmcp<4.0.0", "alpaca-mcp-server"]
 
 # Comprehensive list of supported Alpaca MCP toolsets
 ALPACA_TOOLSETS: List[str] = [

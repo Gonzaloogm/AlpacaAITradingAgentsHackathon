@@ -55,6 +55,34 @@ except ImportError:
 logger = logging.getLogger("alpaca_agent_server")
 logging.basicConfig(level=logging.INFO)
 
+
+def _flatten_list_result(res: Any) -> List[Dict[str, Any]]:
+    """Unwrap ``[{"result": [...]}]`` or ``{"result": [...]}`` MCP envelopes.
+
+    The Alpaca MCP server may return results wrapped in a single-element list
+    whose only item is ``{"result": <actual_list>}``.  This helper normalises
+    the response to a plain list so the frontend always receives a flat array.
+    """
+    # Pattern A: [{"result": [...]}]
+    if (
+        isinstance(res, list)
+        and len(res) == 1
+        and isinstance(res[0], dict)
+        and "result" in res[0]
+        and isinstance(res[0]["result"], list)
+    ):
+        return res[0]["result"]
+
+    # Pattern B: {"result": [...]}
+    if isinstance(res, dict) and "result" in res and isinstance(res["result"], list):
+        return res["result"]
+
+    # Already a plain list
+    if isinstance(res, list):
+        return res
+
+    return [res] if res else []
+
 # Global Application Instance & Configuration
 app = FastAPI(
     title="Alpaca AI Trading Agent",
@@ -110,6 +138,28 @@ async def startup_event() -> None:
             logger.info("AlpacaMCPClient subprocess started successfully.")
         except Exception as e:
             logger.warning("Could not start AlpacaMCPClient subprocess: %s", e)
+            logger.warning(
+                "\n"
+                "╔══════════════════════════════════════════════════════════════╗\n"
+                "║  ⚠️  MOCK-FALLBACK MODE ACTIVE — NOT REAL ALPACA DATA  ⚠️   ║\n"
+                "║                                                              ║\n"
+                "║  MCP subprocess failed to start (see error above).          ║\n"
+                "║  /api/positions and /api/orders will return HARDCODED MOCK  ║\n"
+                "║  data from server.py — NOT your real Alpaca account.        ║\n"
+                "║                                                              ║\n"
+                "║  /health will show: mock_fallback_mode: true                ║\n"
+                "╚══════════════════════════════════════════════════════════════╝"
+            )
+    else:
+        if not (api_key and secret_key):
+            logger.warning(
+                "\n"
+                "╔══════════════════════════════════════════════════════════════╗\n"
+                "║  ⚠️  MOCK-FALLBACK MODE ACTIVE — NO CREDENTIALS SET  ⚠️     ║\n"
+                "║  ALPACA_API_KEY / ALPACA_SECRET_KEY not in environment.     ║\n"
+                "║  All API endpoints return hardcoded mock data.              ║\n"
+                "╚══════════════════════════════════════════════════════════════╝"
+            )
 
     if DecisionEngine:
         primary_provider = "gemini" if gemini_key else ("claude" if anthropic_key else "gemini")
@@ -123,7 +173,12 @@ async def startup_event() -> None:
         except Exception as e:
             logger.warning("Could not initialize DecisionEngine: %s", e)
 
-    logger.info("Server startup complete. Environment: paper=%s", paper_trading)
+    mcp_ok = bool(alpaca_client and getattr(alpaca_client, "is_connected", False))
+    if mcp_ok:
+        logger.info("Server startup complete. MCP=CONNECTED  paper=%s", paper_trading)
+    else:
+        logger.warning("Server startup complete. MCP=DISCONNECTED  paper=%s  *** MOCK DATA MODE ***", paper_trading)
+
 
 
 @app.on_event("shutdown")
@@ -154,15 +209,20 @@ async def health_check() -> Dict[str, Any]:
 
     Returns:
         Dictionary containing server status, version, UTC timestamp, and integration states.
+        ``mock_fallback_mode`` is ``True`` when MCP is disconnected and all endpoints
+        return hardcoded demo data instead of real Alpaca account data.
     """
     mcp_connected = bool(alpaca_client and getattr(alpaca_client, "is_connected", False))
     engine_ready = bool(decision_engine is not None)
+    mock_mode = not mcp_connected
     return {
         "status": "ok",
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "version": app.version,
         "mcp_connected": mcp_connected,
         "engine_ready": engine_ready,
+        "mock_fallback_mode": mock_mode,
+        "data_source": "real_alpaca_account" if mcp_connected else "HARDCODED_MOCK_DATA",
     }
 
 
@@ -212,13 +272,16 @@ async def get_positions() -> List[Dict[str, Any]]:
     if alpaca_client and getattr(alpaca_client, "is_connected", False):
         try:
             res = await alpaca_client.get_positions()
-            if isinstance(res, list):
-                return res
-            return [res] if res else []
+            return _flatten_list_result(res)
         except Exception as e:
             logger.error("Error fetching positions via AlpacaMCPClient: %s", e)
 
-    # Placeholder / mock data fallback
+
+    # Placeholder / mock data fallback — MCP not connected
+    logger.warning(
+        "⚠️  /api/positions returning MOCK DATA (MCP disconnected) — "
+        "check /health for mock_fallback_mode status"
+    )
     return [
         {
             "asset_id": "904807e2-320e-4c3d-b4d9-61ab8b9a1e34",
@@ -251,6 +314,7 @@ async def get_positions() -> List[Dict[str, Any]]:
     ]
 
 
+
 @app.get("/api/orders")
 async def get_orders(
     status: str = "open", limit: int = 50
@@ -267,13 +331,16 @@ async def get_orders(
     if alpaca_client and getattr(alpaca_client, "is_connected", False):
         try:
             res = await alpaca_client.get_orders(status=status, limit=limit)
-            if isinstance(res, list):
-                return res
-            return [res] if res else []
+            return _flatten_list_result(res)
         except Exception as e:
             logger.error("Error fetching orders via AlpacaMCPClient: %s", e)
 
-    # Placeholder / mock data fallback
+
+    # Placeholder / mock data fallback — MCP not connected
+    logger.warning(
+        "⚠️  /api/orders returning MOCK DATA (MCP disconnected) — "
+        "check /health for mock_fallback_mode status"
+    )
     return [
         {
             "id": "order-001",
@@ -289,6 +356,7 @@ async def get_orders(
             "submitted_at": "2026-08-12T10:00:00Z",
         }
     ]
+
 
 
 @app.get("/api/portfolio-history")

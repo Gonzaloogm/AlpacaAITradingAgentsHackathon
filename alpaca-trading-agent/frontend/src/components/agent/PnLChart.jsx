@@ -2,7 +2,8 @@ import React from 'react';
 
 /**
  * PnLChart - Institutional Corporate Style
- * Features: Smooth Monotone Cubic Curve and Teal/Cyan Gradient
+ * Uses a linear polyline so step-function data (flat → jump → flat) renders
+ * accurately without the spline-overshoot spikes that Catmull-Rom produces.
  */
 export default function PnLChart({ data }) {
   if (!data || data.length < 2) {
@@ -31,30 +32,14 @@ export default function PnLChart({ data }) {
 
   const points = getPoints();
 
-  // Create a smooth cubic bezier path
-  const createSmoothPath = (pts) => {
-    if (pts.length < 2) return "";
-    let d = `M ${pts[0].x},${pts[0].y}`;
-    
-    for (let i = 0; i < pts.length - 1; i++) {
-      const p0 = pts[i === 0 ? i : i - 1];
-      const p1 = pts[i];
-      const p2 = pts[i + 1];
-      const p3 = pts[i + 2 === pts.length ? i + 1 : i + 2];
-
-      // Simple Catmull-Rom to Cubic Bezier conversion for smoothness
-      const cp1x = p1.x + (p2.x - p0.x) / 6;
-      const cp1y = p1.y + (p2.y - p0.y) / 6;
-      const cp2x = p2.x - (p3.x - p1.x) / 6;
-      const cp2y = p2.y - (p3.y - p1.y) / 6;
-
-      d += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
-    }
-    return d;
+  // Linear path — no spline overshoot on step-function data
+  const createLinearPath = (pts) => {
+    if (pts.length < 2) return '';
+    return pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x},${p.y}`).join(' ');
   };
 
-  const linePath = createSmoothPath(points);
-  const areaPath = `${linePath} V ${height} H ${padding} Z`;
+  const linePath = createLinearPath(points);
+  const areaPath = `${linePath} L ${points[points.length - 1].x},${height} L ${padding},${height} Z`;
 
   return (
     <div className="w-full h-full">
@@ -73,7 +58,7 @@ export default function PnLChart({ data }) {
         {/* Area fill */}
         <path d={areaPath} fill="url(#pnlCorporateGradient)" />
         
-        {/* Smooth line */}
+        {/* Linear line — faithful step representation */}
         <path
           d={linePath}
           fill="none"
