@@ -26,9 +26,15 @@ export default function ChatInterface() {
   useEffect(() => {
     localStorage.setItem(SESSION_KEY, sessionId);
     (async () => {
-      const result = await apiClient.getChatHistory(sessionId);
+      const result = await apiClient.getChatHistory(sessionId, { silent: true });
       if (result.success && result.data.history?.length > 0) {
         setMessages(result.data.history);
+      } else if (!result.success && (result.status === 404 || (result.error && result.error.includes('not found')))) {
+        // Recover gracefully from a stale session (e.g. backend restarted)
+        const freshSessionId = crypto.randomUUID();
+        localStorage.setItem(SESSION_KEY, freshSessionId);
+        setSessionId(freshSessionId);
+        setMessages([GREETING]);
       }
     })();
   }, [sessionId]);
@@ -66,7 +72,7 @@ export default function ChatInterface() {
   };
 
   return (
-    <div className="bg-[#12141C] border border-white/5 rounded-2xl flex flex-col h-[600px] shadow-lg overflow-hidden font-sans">
+    <div className="bg-[#12141C] border border-white/5 rounded-xl flex flex-col h-[600px] shadow-lg overflow-hidden font-sans">
       <div className="flex justify-between items-center p-4 border-b border-white/5 bg-white/[0.01]">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded bg-blue-500/10 text-blue-400"><Bot size={18} /></div>
@@ -86,7 +92,7 @@ export default function ChatInterface() {
             <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center ${msg.role === 'user' ? 'bg-slate-700 text-white' : 'bg-blue-600 text-white'}`}>
               {msg.role === 'user' ? <User size={14} /> : <Bot size={14} />}
             </div>
-            <div className={`px-5 py-3.5 rounded-2xl text-sm leading-relaxed shadow-sm ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-tr-sm' : 'bg-white/[0.03] border border-white/5 text-slate-200 rounded-tl-sm'}`}>
+            <div className={`px-5 py-3.5 rounded-xl text-sm leading-relaxed shadow-sm ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-tr-sm' : 'bg-white/[0.03] border border-white/5 text-slate-200 rounded-tl-sm'}`}>
               <div className="whitespace-pre-wrap">{msg.content}</div>
             </div>
           </div>
@@ -94,7 +100,7 @@ export default function ChatInterface() {
         {loading && (
           <div className="flex gap-4 max-w-[85%]">
             <div className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center bg-blue-600 text-white"><Bot size={14} /></div>
-            <div className="px-5 py-3.5 rounded-2xl rounded-tl-sm bg-white/[0.03] border border-white/5 flex items-center gap-2">
+            <div className="px-5 py-3.5 rounded-xl rounded-tl-sm bg-white/[0.03] border border-white/5 flex items-center gap-2">
               <LoadingSpinner size="sm" /> <span className="text-xs font-mono text-slate-500 uppercase tracking-widest">Thinking...</span>
             </div>
           </div>

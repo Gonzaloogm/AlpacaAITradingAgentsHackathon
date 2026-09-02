@@ -91,7 +91,7 @@ export default function MessageBubble({ message }) {
 
       {/* Content */}
       <div className={`max-w-[80%] sm:max-w-[75%] ${isUser ? 'items-end' : 'items-start'} flex flex-col gap-1`}>
-        <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+        <div className={`rounded-xl px-4 py-3 text-sm leading-relaxed ${
           isUser
             ? 'bg-purple-700/40 border border-purple-500/30 text-gray-100 rounded-tr-sm'
             : 'bg-white/[0.04] border border-white/[0.08] text-gray-200 rounded-tl-sm'

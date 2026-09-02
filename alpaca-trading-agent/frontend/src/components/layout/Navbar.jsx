@@ -1,9 +1,10 @@
 import { NavLink } from 'react-router-dom';
 import { useAgentStatus } from '../../hooks/useAgentStatus';
-import { Activity, ShieldCheck, Terminal, Wallet, MessageSquare } from 'lucide-react';
+import { Activity, ShieldCheck, Terminal, Wallet, MessageSquare, BarChart2 } from 'lucide-react';
 
 const navLinks = [
   { to: '/dashboard', label: 'Dashboard', icon: <Activity size={14} /> },
+  { to: '/analytics', label: 'Analytics', icon: <BarChart2 size={14} /> },
   { to: '/logs', label: 'Reasoning Log', icon: <Terminal size={14} /> },
   { to: '/positions', label: 'Positions & Orders', icon: <Wallet size={14} /> },
   { to: '/chat', label: 'AI Chat Assistant', icon: <MessageSquare size={14} /> },

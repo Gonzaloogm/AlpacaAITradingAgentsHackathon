@@ -7,7 +7,7 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 font-sans bg-[#0D0F14]">
       <div className="max-w-3xl text-center space-y-8">
-        <div className="inline-flex items-center justify-center p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400 mb-4 shadow-lg shadow-blue-500/10">
+        <div className="inline-flex items-center justify-center p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 mb-4 shadow-lg shadow-blue-500/10">
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M3 21L10 12L14 16L21 5" />
             <path d="M16 5h5v5" />
@@ -23,17 +23,17 @@ export default function LandingPage() {
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-8 pb-12 text-left">
-          <div className="p-6 rounded-2xl bg-[#12141C] border border-white/5">
+          <div className="p-6 rounded-xl bg-[#12141C] border border-white/5">
             <Cpu className="text-blue-500 mb-4" size={24} />
             <h3 className="text-white font-bold mb-2">AI Decision Engine</h3>
             <p className="text-sm text-slate-500">Powered by Google Gemini and Anthropic Claude for intelligent market analysis.</p>
           </div>
-          <div className="p-6 rounded-2xl bg-[#12141C] border border-white/5">
+          <div className="p-6 rounded-xl bg-[#12141C] border border-white/5">
             <Activity className="text-emerald-500 mb-4" size={24} />
             <h3 className="text-white font-bold mb-2">Pairs Trading Strategy</h3>
             <p className="text-sm text-slate-500">An AI-driven pairs trading agent executing live on Alpaca.</p>
           </div>
-          <div className="p-6 rounded-2xl bg-[#12141C] border border-white/5">
+          <div className="p-6 rounded-xl bg-[#12141C] border border-white/5">
             <ShieldCheck className="text-amber-500 mb-4" size={24} />
             <h3 className="text-white font-bold mb-2">MCP Integration</h3>
             <p className="text-sm text-slate-500">Using the Model Context Protocol (MCP) to seamlessly interact with Alpaca trading APIs.</p>

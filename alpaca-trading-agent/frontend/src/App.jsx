@@ -4,6 +4,7 @@ import Layout from './components/layout/Layout';
 import { ToastProvider } from './components/ui/Toast';
 import LandingPage from './pages/LandingPage';
 import DashboardPage from './pages/DashboardPage';
+import AnalyticsPage from './pages/AnalyticsPage';
 import ReasoningLogPage from './pages/ReasoningLogPage';
 import PositionsPage from './pages/PositionsPage';
 import ChatPage from './pages/ChatPage';
@@ -32,6 +33,7 @@ export default function App() {
               <Layout>
                 <Routes>
                   <Route path="/dashboard" element={<DashboardPage />} />
+                  <Route path="/analytics" element={<AnalyticsPage />} />
                   <Route path="/logs font" element={<ReasoningLogPage />} />
                   <Route path="/logs" element={<ReasoningLogPage />} />
                   <Route path="/positions" element={<PositionsPage />} />

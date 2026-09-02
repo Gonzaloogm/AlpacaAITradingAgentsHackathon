@@ -24,7 +24,7 @@ export default function PositionsPage() {
 
   return (
     <div className="space-y-8 pb-12 font-sans">
-      <div className="flex justify-between items-center bg-[#12141C] border border-white/5 rounded-2xl p-6 shadow-lg">
+      <div className="flex justify-between items-center bg-[#12141C] border border-white/5 rounded-xl p-6 shadow-lg">
         <div>
           <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-3">
             <Wallet className="text-blue-500" /> Portfolio Holdings
@@ -36,7 +36,7 @@ export default function PositionsPage() {
         </button>
       </div>
 
-      <div className="bg-[#12141C] border border-white/5 rounded-2xl p-6 shadow-lg overflow-hidden">
+      <div className="bg-[#12141C] border border-white/5 rounded-xl p-6 shadow-lg overflow-hidden">
         <h2 className="text-sm font-bold uppercase tracking-wider text-slate-300 mb-4 flex justify-between">
           Active Positions <span className="text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full">{positions.length}</span>
         </h2>
@@ -84,7 +84,7 @@ export default function PositionsPage() {
         )}
       </div>
 
-      <div className="bg-[#12141C] border border-white/5 rounded-2xl p-6 shadow-lg overflow-hidden">
+      <div className="bg-[#12141C] border border-white/5 rounded-xl p-6 shadow-lg overflow-hidden">
         <h2 className="text-sm font-bold uppercase tracking-wider text-slate-300 mb-4 flex justify-between">
           Recent Orders <span className="text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full">{orders.length}</span>
         </h2>

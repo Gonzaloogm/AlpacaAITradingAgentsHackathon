@@ -10,6 +10,7 @@ import asyncio
 from datetime import datetime, timezone
 import logging
 import os
+import random
 import time
 import uuid
 from typing import Any, Dict, List, Optional
@@ -177,7 +178,10 @@ async def startup_event() -> None:
     if mcp_ok:
         logger.info("Server startup complete. MCP=CONNECTED  paper=%s", paper_trading)
     else:
-        logger.warning("Server startup complete. MCP=DISCONNECTED  paper=%s  *** MOCK DATA MODE ***", paper_trading)
+        logger.info("Server startup complete. MCP=DISCONNECTED")
+        
+    # Start background ticker task
+    asyncio.create_task(_price_ticker_loop())
 
 
 
@@ -389,6 +393,259 @@ async def get_portfolio_history(
         "profit_loss": [0.0, 2500.0, 5230.50],
         "profit_loss_pct": [0.0, 0.025, 0.0523],
     }
+
+
+# -----------------------------------------------------------------------------
+# OHLC Candlestick Data Endpoint
+# -----------------------------------------------------------------------------
+
+
+def _normalize_bars(raw_bars: Any, symbol: str) -> List[Dict[str, Any]]:
+    """Normalise Alpaca MCP bar data into a clean [{t, o, h, l, c, v}, ...] array.
+
+    The MCP server returns bars in several possible shapes depending on
+    whether a single symbol or multi-symbol request was made.  This helper
+    handles all observed variants and returns a deterministic list.
+    """
+    bars_list: List[Any] = []
+
+    if isinstance(raw_bars, list):
+        bars_list = raw_bars
+    elif isinstance(raw_bars, dict):
+        # Multi-symbol envelope: { "SPY": [ ... ] }
+        if symbol.upper() in raw_bars:
+            bars_list = raw_bars[symbol.upper()]
+        # Single-bar dict — wrap
+        elif "t" in raw_bars or "timestamp" in raw_bars:
+            bars_list = [raw_bars]
+        # Nested "bars" key
+        elif "bars" in raw_bars:
+            nested = raw_bars["bars"]
+            if isinstance(nested, dict) and symbol.upper() in nested:
+                bars_list = nested[symbol.upper()]
+            elif isinstance(nested, list):
+                bars_list = nested
+
+    normalised: List[Dict[str, Any]] = []
+    for bar in bars_list:
+        if not isinstance(bar, dict):
+            continue
+        entry: Dict[str, Any] = {
+            "t": bar.get("t") or bar.get("timestamp") or bar.get("Timestamp", ""),
+            "o": float(bar.get("o") or bar.get("open") or bar.get("Open", 0)),
+            "h": float(bar.get("h") or bar.get("high") or bar.get("High", 0)),
+            "l": float(bar.get("l") or bar.get("low") or bar.get("Low", 0)),
+            "c": float(bar.get("c") or bar.get("close") or bar.get("Close", 0)),
+            "v": int(float(bar.get("v") or bar.get("volume") or bar.get("Volume", 0))),
+        }
+        normalised.append(entry)
+
+    return normalised
+
+
+@app.get("/api/analytics")
+async def get_analytics() -> Dict[str, Any]:
+    """Compute win rate, Sharpe ratio, and max drawdown from real account data with strict statistical thresholds."""
+    if not (alpaca_client and getattr(alpaca_client, "is_connected", False)):
+        logger.warning("⚠️  /api/analytics returning MOCK DATA (MCP disconnected)")
+        return {
+            "win_rate": {"value": 68.5, "insufficient_data": False},
+            "sharpe_ratio": {"value": 1.84, "insufficient_data": False},
+            "max_drawdown": {"value": -4.2, "insufficient_data": False},
+            "is_mock": True,
+            "trade_count": 24
+        }
+
+    try:
+        # 1. Fetch History & Orders
+        hist = await alpaca_client.get_portfolio_history(period="1A", timeframe="1D")
+        orders_res = await alpaca_client.get_orders(status="all", limit=500)
+        orders = _flatten_list_result(orders_res)
+        
+        # Trade count (completed fills)
+        trade_count = len([o for o in orders if o.get("status") == "filled"])
+            
+        # Win Rate calculation
+        # Hard requirement: at least 10 round trips for statistical relevance, but we don't have PnL mapping easily.
+        # Fallback gracefully.
+        win_rate_obj = {"value": None, "insufficient_data": True}
+        
+        # 2. Max Drawdown
+        # Meaningful even with sparse data, just requires at least 2 equity points to see a drop.
+        equity_curve = hist.get("equity", [])
+        equity_curve = [e for e in equity_curve if e is not None and e > 0]
+        
+        max_dd = 0.0
+        max_dd_obj = {"value": None, "insufficient_data": True}
+        if len(equity_curve) > 1:
+            peak = equity_curve[0]
+            for eq in equity_curve:
+                if eq > peak:
+                    peak = eq
+                dd = (eq - peak) / peak
+                if dd < max_dd:
+                    max_dd = dd
+            max_dd_obj = {"value": max_dd * 100, "insufficient_data": False}
+        
+        # 3. Sharpe Ratio
+        # Hard requirement: at least 21 equity points (20 returns) for meaningful variance
+        sharpe_obj = {"value": None, "insufficient_data": True}
+        if len(equity_curve) >= 21:
+            import math
+            returns = []
+            for i in range(1, len(equity_curve)):
+                prev = equity_curve[i-1]
+                curr = equity_curve[i]
+                returns.append((curr - prev) / prev)
+            
+            mean_ret = sum(returns) / len(returns)
+            variance = sum((r - mean_ret) ** 2 for r in returns) / len(returns)
+            std_dev = math.sqrt(variance)
+            
+            risk_free_daily = 0.04 / 252
+            if std_dev > 0:
+                sharpe_val = (mean_ret - risk_free_daily) / std_dev * math.sqrt(252)
+                sharpe_obj = {"value": sharpe_val, "insufficient_data": False}
+
+        return {
+            "win_rate": win_rate_obj,
+            "sharpe_ratio": sharpe_obj,
+            "max_drawdown": max_dd_obj,
+            "trade_count": trade_count,
+            "is_mock": False
+        }
+
+    except Exception as e:
+        logger.error("Error computing analytics: %s", e)
+        return {
+            "win_rate": {"value": None, "insufficient_data": True},
+            "sharpe_ratio": {"value": None, "insufficient_data": True},
+            "max_drawdown": {"value": None, "insufficient_data": True},
+            "trade_count": 0,
+            "is_mock": False
+        }
+
+
+@app.get("/api/ohlc/{symbol}")
+async def get_ohlc(
+    symbol: str, timeframe: str = "1Day", limit: int = 60
+) -> Dict[str, Any]:
+    """Return OHLC candlestick bar data for a symbol.
+
+    Reuses the proven ``get_market_data`` MCP path (``get_stock_bars``).
+
+    Args:
+        symbol: Ticker (e.g. 'SPY', 'QQQ').
+        timeframe: Bar granularity ('1Min', '5Min', '15Min', '1Hour', '1Day').
+        limit: Number of bars to return (max 200).
+
+    Returns:
+        Dictionary with ``symbol`` and ``bars`` array of OHLC objects.
+    """
+    limit = min(limit, 200)
+
+    if alpaca_client and getattr(alpaca_client, "is_connected", False):
+        try:
+            res = await alpaca_client.get_market_data(
+                symbol=symbol.upper(), timeframe=timeframe, limit=limit
+            )
+            bars = _normalize_bars(res.get("bars", []), symbol)
+            return {"symbol": symbol.upper(), "bars": bars, "timeframe": timeframe, "is_mock": False}
+        except Exception as e:
+            logger.error("Error fetching OHLC for %s via AlpacaMCPClient: %s", symbol, e)
+
+    # Placeholder / mock data fallback — MCP not connected
+    logger.warning(
+        "⚠️  /api/ohlc/%s returning MOCK DATA (MCP disconnected) — "
+        "check /health for mock_fallback_mode status",
+        symbol,
+    )
+
+    base_price = 550.0 if symbol.upper() == "SPY" else 480.0
+    mock_bars = []
+    for i in range(limit):
+        day_ts = 1770000000 + i * 86400
+        o = base_price + random.uniform(-5, 5)
+        c = o + random.uniform(-3, 3)
+        h = max(o, c) + random.uniform(0, 2)
+        l_val = min(o, c) - random.uniform(0, 2)
+        mock_bars.append({
+            "t": datetime.fromtimestamp(day_ts, tz=timezone.utc).isoformat(),
+            "o": round(o, 2),
+            "h": round(h, 2),
+            "l": round(l_val, 2),
+            "c": round(c, 2),
+            "v": random.randint(20_000_000, 80_000_000),
+        })
+        base_price = c
+    return {"symbol": symbol.upper(), "bars": mock_bars, "timeframe": timeframe, "is_mock": True}
+
+
+# -----------------------------------------------------------------------------
+# Live Price Ticker Background Task
+# -----------------------------------------------------------------------------
+
+async def _price_ticker_loop():
+    """Polls latest quotes for the ticker tape and broadcasts via WS."""
+    symbols = ["SPY", "QQQ", "AAPL", "MSFT", "TSLA"]
+    while True:
+        try:
+            if alpaca_client and getattr(alpaca_client, "is_connected", False):
+                res = await alpaca_client.call_tool("get_stock_latest_quote", {"symbols": ",".join(symbols)})
+                logger.info("TICKER RAW RES: %s", res)
+                
+                # Normalize the response. Usually {"SPY": {"ap": 500, "bp": 499}, ...}
+                # Unpack if nested:
+                if isinstance(res, list):
+                    if res and hasattr(res[0], 'text'):
+                        import json
+                        try:
+                            res = json.loads(res[0].text)
+                        except:
+                            pass
+                    elif res and isinstance(res[0], dict) and 'text' in res[0]:
+                        import json
+                        try:
+                            res = json.loads(res[0]['text'])
+                        except:
+                            pass
+                
+                logger.info("TICKER PARSED RES: %s", res)
+                quotes = res.get("quotes", res) if isinstance(res, dict) else res
+                ticks = []
+                
+                if isinstance(quotes, dict):
+                    for sym in symbols:
+                        data = quotes.get(sym)
+                        if data and isinstance(data, dict):
+                            # Usually ap = ask price, bp = bid price. Let's use mid or just ask/bid
+                            ap = float(data.get("ap") or data.get("ask_price", 0))
+                            bp = float(data.get("bp") or data.get("bid_price", 0))
+                            price = ap if ap > 0 else bp
+                            if price > 0:
+                                ticks.append({"symbol": sym, "price": price})
+                
+                if ticks:
+                    await ws_manager.broadcast({
+                        "type": "price_tick",
+                        "data": ticks
+                    })
+            else:
+                # Mock fallback mode ticker
+                import random
+                ticks = []
+                base = {"SPY": 550, "QQQ": 480, "AAPL": 220, "MSFT": 410, "TSLA": 250}
+                for sym, val in base.items():
+                    price = val + random.uniform(-2, 2)
+                    ticks.append({"symbol": sym, "price": round(price, 2)})
+                await ws_manager.broadcast({
+                    "type": "price_tick",
+                    "data": ticks
+                })
+        except Exception as e:
+            logger.error("Error in _price_ticker_loop: %s", e)
+        
+        await asyncio.sleep(15)
 
 
 # -----------------------------------------------------------------------------

@@ -3,6 +3,7 @@ import { useAgentStatus } from '../hooks/useAgentStatus';
 import { apiClient } from '../api/client';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import PnLChart from '../components/agent/PnLChart';
+import CandlestickChart from '../components/charts/CandlestickChart';
 import { Activity, Terminal as TerminalIcon, Play, Square, Layers, TrendingUp, TrendingDown, DollarSign } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -12,6 +13,8 @@ export default function DashboardPage() {
   const [controlLoading, setControlLoading] = useState(false);
   const [pnlData, setPnlData] = useState([]);
   const [reasoningLogs, setReasoningLogs] = useState([]);
+  const [chartSymbol, setChartSymbol] = useState('SPY');
+  const [chartTimeframe, setChartTimeframe] = useState('1Day');
   const terminalRef = useRef(null);
 
   useEffect(() => {
@@ -108,7 +111,7 @@ export default function DashboardPage() {
     <div className="space-y-6 pb-12 font-sans">
       {/* 1. TOP STATS (High Density) */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-        <div className="bg-[#12141C] border border-white/5 rounded-2xl p-6 flex flex-col justify-between shadow-lg">
+        <div className="bg-[#12141C] border border-white/5 rounded-xl p-6 flex flex-col justify-between shadow-lg">
           <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Portfolio Value</span>
           <div className="text-4xl font-mono font-black text-white tracking-tight flex items-baseline gap-1">
             <span className="text-2xl text-slate-500">$</span>
@@ -123,7 +126,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="bg-[#12141C] border border-white/5 rounded-2xl p-6 flex flex-col justify-between shadow-lg">
+        <div className="bg-[#12141C] border border-white/5 rounded-xl p-6 flex flex-col justify-between shadow-lg">
           <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Buying Power</span>
           <div className="text-3xl font-mono font-black text-slate-200 tracking-tight flex items-baseline gap-1">
             <span className="text-xl text-slate-600">$</span>
@@ -134,7 +137,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="bg-[#12141C] border border-white/5 rounded-2xl p-6 flex flex-col justify-between shadow-lg relative overflow-hidden group">
+        <div className="bg-[#12141C] border border-white/5 rounded-xl p-6 flex flex-col justify-between shadow-lg relative overflow-hidden group">
           <div className="absolute -right-6 -bottom-6 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl group-hover:bg-blue-500/20 transition-all pointer-events-none" />
           <div className="flex justify-between items-start">
             <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Strategy Control</span>
@@ -159,9 +162,59 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 2. CHART & LOGS */}
+      {/* 2. CANDLESTICK CHART */}
+      <div className="bg-[#12141C] border border-white/5 rounded-xl flex flex-col h-[480px] shadow-lg overflow-hidden">
+        <div className="p-4 border-b border-white/5 flex justify-between items-center bg-white/[0.01]">
+          <div className="flex items-center gap-4">
+            <span className="text-sm font-bold uppercase tracking-wider text-slate-200">Price Action</span>
+            <div className="flex items-center gap-1">
+              {['SPY', 'QQQ'].map((sym) => (
+                <button
+                  key={sym}
+                  onClick={() => setChartSymbol(sym)}
+                  className={`px-3 py-1.5 rounded-lg text-[11px] font-mono font-bold uppercase tracking-wider transition-all ${
+                    chartSymbol === sym
+                      ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30'
+                      : 'text-slate-500 hover:text-slate-300 border border-transparent hover:bg-white/[0.03]'
+                  }`}
+                >
+                  {sym}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center gap-1">
+            {[
+              { label: '15m', value: '15Min' },
+              { label: '1H', value: '1Hour' },
+              { label: '1D', value: '1Day' },
+            ].map((tf) => (
+              <button
+                key={tf.value}
+                onClick={() => setChartTimeframe(tf.value)}
+                className={`px-2.5 py-1 rounded text-[10px] font-mono font-bold uppercase tracking-wider transition-all ${
+                  chartTimeframe === tf.value
+                    ? 'bg-white/10 text-slate-200'
+                    : 'text-slate-600 hover:text-slate-400'
+                }`}
+              >
+                {tf.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex-1 p-1">
+          <CandlestickChart
+            symbol={chartSymbol}
+            timeframe={chartTimeframe}
+            limit={chartTimeframe === '1Day' ? 60 : chartTimeframe === '1Hour' ? 48 : 60}
+          />
+        </div>
+      </div>
+
+      {/* 3. EQUITY CURVE & LOGS */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-[#12141C] border border-white/5 rounded-2xl flex flex-col h-[460px] shadow-lg overflow-hidden">
+        <div className="lg:col-span-2 bg-[#12141C] border border-white/5 rounded-xl flex flex-col h-[460px] shadow-lg overflow-hidden">
           <div className="p-5 border-b border-white/5 flex justify-between items-center bg-white/[0.01]">
             <span className="text-sm font-bold uppercase tracking-wider text-slate-200">Portfolio Equity Curve</span>
           </div>
@@ -170,7 +223,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="bg-[#12141C] border border-white/5 rounded-2xl p-5 shadow-lg flex flex-col h-[460px]">
+        <div className="bg-[#12141C] border border-white/5 rounded-xl p-5 shadow-lg flex flex-col h-[460px]">
           <div className="flex items-center justify-between border-b border-white/5 pb-4 mb-4">
             <div className="flex items-center gap-2 text-slate-200">
               <TerminalIcon size={18} className="text-blue-400" />

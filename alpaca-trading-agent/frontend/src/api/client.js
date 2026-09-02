@@ -28,17 +28,22 @@ export class APIClient {
 
       if (!response.ok) {
         const msg = data.detail || data.error || `HTTP ${response.status}`;
-        throw new Error(msg);
+        if (!options.silent) {
+          console.error(`[API] ${endpoint} failed:`, msg);
+        }
+        return { success: false, error: msg, status: response.status };
       }
       return { success: true, data };
     } catch (error) {
-      console.error(`[API] ${endpoint} failed:`, error);
-      return { success: false, error: error.message || 'Unknown error' };
+      if (!options.silent) {
+        console.error(`[Network Error] ${endpoint}:`, error);
+      }
+      return { success: false, error: error.message };
     }
   }
 
-  get(endpoint) { return this.request(endpoint, { method: 'GET' }); }
-  post(endpoint, body = {}) { return this.request(endpoint, { method: 'POST', body: JSON.stringify(body) }); }
+  async get(endpoint, options = {}) { return this.request(endpoint, { method: 'GET', ...options }); }
+  async post(endpoint, body = {}, options = {}) { return this.request(endpoint, { method: 'POST', body: JSON.stringify(body), ...options }); }
 
   getHealth() { return this.get('/health'); }
   getAccount() { return this.get('/api/account'); }
@@ -46,6 +51,12 @@ export class APIClient {
   getOrders() { return this.get('/api/orders'); }
   getPortfolioHistory(period = '1M', timeframe = '1D') { 
     return this.get(`/api/portfolio-history?period=${period}&timeframe=${timeframe}`); 
+  }
+  getOHLC(symbol = 'SPY', timeframe = '1Day', limit = 60) {
+    return this.get(`/api/ohlc/${symbol}?timeframe=${timeframe}&limit=${limit}`);
+  }
+  getAnalytics() {
+    return this.get('/api/analytics');
   }
   getAgentState() { return this.get('/api/agent-state'); }
   
@@ -62,8 +73,8 @@ export class APIClient {
     return this.post('/api/session/new');
   }
 
-  async getChatHistory(sessionId) {
-    return this.get(`/api/session/${sessionId}/history`);
+  async getChatHistory(sessionId, options = {}) {
+    return this.get(`/api/session/${sessionId}/history`, options);
   }
 
   startStrategy(config = null) { 

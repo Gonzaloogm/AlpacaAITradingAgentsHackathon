@@ -20,7 +20,7 @@ export default function ReasoningLogPage() {
 
   return (
     <div className="space-y-6 pb-12 font-sans">
-      <div className="flex justify-between items-center bg-[#12141C] border border-white/5 rounded-2xl p-6 shadow-lg">
+      <div className="flex justify-between items-center bg-[#12141C] border border-white/5 rounded-xl p-6 shadow-lg">
         <div>
           <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-3">
             <Terminal className="text-blue-500" /> Reasoning Log
@@ -32,7 +32,7 @@ export default function ReasoningLogPage() {
         </button>
       </div>
 
-      <div className="bg-[#12141C] border border-white/5 rounded-2xl shadow-lg overflow-hidden">
+      <div className="bg-[#12141C] border border-white/5 rounded-xl shadow-lg overflow-hidden">
         {loading && logs.length === 0 ? (
           <div className="h-64 flex items-center justify-center"><LoadingSpinner size="md" /></div>
         ) : logs.length > 0 ? (
