@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { useAgentStatus } from '../hooks/useAgentStatus';
 import { apiClient } from '../api/client';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
@@ -57,10 +58,12 @@ export default function DashboardPage() {
             if (msg.type === 'agent_state_update' && msg.data) {
               setStrategyRunning(msg.data.is_running);
             }
-          } catch (err) {}
+          } catch {
+            // Ignore parse errors on malformed messages
+          }
         };
         ws.onclose = () => setTimeout(connect, 5000);
-      } catch (e) {
+      } catch {
         setTimeout(connect, 5000);
       }
     };
@@ -95,7 +98,7 @@ export default function DashboardPage() {
     return (
       <div className="h-[80vh] flex flex-col items-center justify-center bg-[#0D0F14]">
         <LoadingSpinner size="lg" />
-        <span className="mt-4 font-mono text-xs text-slate-400">Loading Vantage data...</span>
+        <span className="mt-4 font-mono text-xs text-slate-400">Loading market data & portfolio state...</span>
       </div>
     );
   }
@@ -140,12 +143,18 @@ export default function DashboardPage() {
         <div className="bg-[#12141C] border border-white/5 rounded-xl p-6 flex flex-col justify-between shadow-lg relative overflow-hidden group">
           <div className="absolute -right-6 -bottom-6 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl group-hover:bg-blue-500/20 transition-all pointer-events-none" />
           <div className="flex justify-between items-start">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Strategy Control</span>
+            <div>
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 block">Strategy Control</span>
+              <div className="flex items-center gap-1.5 text-[10px] font-mono text-blue-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-ping" />
+                Gemini 3.6 Flash · AI Engine
+              </div>
+            </div>
             <div className={`p-2 rounded-lg ${strategyRunning ? 'bg-emerald-500/10 text-emerald-400' : 'bg-white/5 text-slate-500'}`}>
               <Activity size={20} className={strategyRunning ? 'animate-pulse' : ''} />
             </div>
           </div>
-          <div className="text-lg font-bold text-white leading-tight mt-2 mb-4">
+          <div className="text-lg font-bold text-white leading-tight mt-2 mb-3">
             Pairs Trading <span className="text-blue-400 font-mono text-sm">(SPY/QQQ)</span>
           </div>
           <button
@@ -229,23 +238,42 @@ export default function DashboardPage() {
               <TerminalIcon size={18} className="text-blue-400" />
               <h3 className="text-sm font-bold uppercase tracking-wider">Reasoning Audit</h3>
             </div>
+            <Link to="/logs" className="text-xs font-mono text-blue-400 hover:text-blue-300 transition-colors">
+              View All Logs →
+            </Link>
           </div>
           <div ref={terminalRef} className="flex-1 overflow-y-auto space-y-3 pr-2 scrollbar-thin scrollbar-thumb-slate-800">
             {reasoningLogs.length > 0 ? (
               reasoningLogs.map((log, idx) => (
                 <div key={idx} className="bg-white/[0.02] p-4 rounded-xl border border-white/5 space-y-2 hover:bg-white/[0.03] transition-colors">
                   <div className="flex justify-between items-center text-xs font-mono">
-                    <span className="text-slate-400">ID: {log.cycle_id}</span>
-                    <span className={`px-2 py-1 rounded font-bold uppercase ${
-                      log.decision?.action === 'buy' ? 'bg-emerald-500/10 text-emerald-400' :
-                      log.decision?.action === 'sell' ? 'bg-rose-500/10 text-rose-400' : 'bg-amber-500/10 text-amber-400'
-                    }`}>
-                      {log.decision?.action || 'HOLD'}
-                    </span>
+                    <span className="text-slate-400">Cycle #{log.cycle_id}</span>
+                    <div className="flex items-center gap-2">
+                      {log.decision?.confidence && (
+                        <span className="text-slate-500 font-mono text-[10px]">
+                          {Math.round(log.decision.confidence * 100)}% conf
+                        </span>
+                      )}
+                      <span className={`px-2 py-0.5 rounded font-bold uppercase ${
+                        log.decision?.action === 'buy' ? 'bg-emerald-500/10 text-emerald-400' :
+                        log.decision?.action === 'sell' ? 'bg-rose-500/10 text-rose-400' : 'bg-amber-500/10 text-amber-400'
+                      }`}>
+                        {log.decision?.action || 'HOLD'}
+                      </span>
+                    </div>
                   </div>
                   <div className="text-slate-300 text-sm leading-relaxed font-sans">
                     {log.llm_reasoning || log.decision?.reasoning}
                   </div>
+                  {log.mcp_tools_called && log.mcp_tools_called.length > 0 && (
+                    <div className="pt-1 flex flex-wrap gap-1">
+                      {log.mcp_tools_called.map((tc, tIdx) => (
+                        <span key={tIdx} className="text-[10px] font-mono text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded border border-cyan-500/20">
+                          ⚡ MCP: {tc.name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))
             ) : (

@@ -35,7 +35,7 @@ export default function TickerTape() {
               return next;
             });
           }
-        } catch (err) {
+        } catch {
           // Ignore parse errors
         }
       };

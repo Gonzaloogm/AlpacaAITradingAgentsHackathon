@@ -18,7 +18,7 @@ export class APIClient {
       if (text) {
         try {
           data = JSON.parse(text);
-        } catch (e) {
+        } catch {
           console.warn(`[API] Non-JSON response from ${endpoint}: ${text.slice(0, 100)}`);
           data = { _raw: text };
         }

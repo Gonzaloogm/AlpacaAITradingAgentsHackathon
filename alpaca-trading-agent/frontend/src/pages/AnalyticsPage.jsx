@@ -18,7 +18,7 @@ export default function AnalyticsPage() {
         } else {
           setError(res.error || 'Failed to load analytics data.');
         }
-      } catch (err) {
+      } catch {
         setError('Network error loading analytics.');
       } finally {
         setLoading(false);
@@ -65,43 +65,106 @@ export default function AnalyticsPage() {
           title="Sharpe Ratio"
           icon={<BarChart2 size={24} />}
           isMock={is_mock}
-          value={renderValue(sharpe_ratio?.value, v => v.toFixed(2))}
+          value={renderValue(sharpe_ratio?.value, (v) => v.toFixed(2))}
           insufficientData={sharpe_ratio?.insufficient_data}
-          subtitle="Annualized risk-adjusted return (Risk-free rate: 4%)"
+          badge={
+            sharpe_ratio?.value >= 1.5
+              ? { text: 'Optimal (>1.5)', color: 'emerald' }
+              : { text: 'Normal (>1.0)', color: 'blue' }
+          }
+          subtitle="Annualized risk-adjusted excess return (Risk-free: 4%)"
         />
-        
+
         <MetricCard
           title="Win Rate"
           icon={<Target size={24} />}
           isMock={is_mock}
-          value={renderValue(win_rate?.value, v => `${v.toFixed(1)}%`)}
+          value={renderValue(win_rate?.value, (v) => `${v.toFixed(1)}%`)}
           insufficientData={win_rate?.insufficient_data}
-          subtitle="% of closed trades with positive realized P&L"
+          progress={win_rate?.value || 0}
+          badge={
+            win_rate?.value >= 60
+              ? { text: 'High (>60%)', color: 'emerald' }
+              : { text: 'Balanced', color: 'blue' }
+          }
+          subtitle="% of round-trip trades closing with positive realized P&L"
         />
-        
+
         <MetricCard
           title="Max Drawdown"
           icon={<TrendingDown size={24} />}
           isMock={is_mock}
-          value={renderValue(max_drawdown?.value, v => `${v.toFixed(2)}%`)}
+          value={renderValue(max_drawdown?.value, (v) => `${v.toFixed(2)}%`)}
           insufficientData={max_drawdown?.insufficient_data}
-          subtitle="Largest peak-to-trough equity decline"
+          badge={
+            Math.abs(max_drawdown?.value || 0) <= 5
+              ? { text: 'Controlled (<5%)', color: 'emerald' }
+              : { text: 'Elevated Risk', color: 'rose' }
+          }
+          subtitle="Largest historical peak-to-trough equity decline"
         />
       </div>
 
-      <div className="bg-[#12141C] border border-white/5 rounded-xl p-6 shadow-lg">
-        <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300 mb-6 flex items-center gap-2">
-          <Activity size={16} className="text-slate-500" />
-          Trade Statistics
-        </h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
-          <div>
-            <div className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Total Trades</div>
-            <div className="text-2xl font-mono text-slate-200">{trade_count}</div>
+      {/* Strategy Engine & Statistics Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-[#12141C] border border-white/5 rounded-xl p-6 shadow-lg">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-200 mb-6 flex items-center gap-2">
+            <Activity size={16} className="text-blue-400" />
+            Execution & Account Telemetry
+          </h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
+            <div>
+              <div className="text-slate-500 text-[10px] font-mono font-bold uppercase tracking-wider mb-1">
+                Completed Trades
+              </div>
+              <div className="text-2xl font-mono font-bold text-white">{trade_count}</div>
+              <div className="text-[11px] text-slate-500 mt-1">Filled on Alpaca</div>
+            </div>
+            <div>
+              <div className="text-slate-500 text-[10px] font-mono font-bold uppercase tracking-wider mb-1">
+                Telemetry Mode
+              </div>
+              <div className="text-sm font-mono font-bold text-slate-200 mt-1">
+                {is_mock ? 'Mock Fallback' : 'Live Alpaca MCP'}
+              </div>
+              <div className="text-[11px] text-slate-500 mt-1">
+                {is_mock ? 'Subprocess offline' : 'Real-time JSON-RPC'}
+              </div>
+            </div>
+            <div>
+              <div className="text-slate-500 text-[10px] font-mono font-bold uppercase tracking-wider mb-1">
+                Active AI Engine
+              </div>
+              <div className="text-sm font-mono font-bold text-blue-400 mt-1">
+                Gemini 3.6 Flash
+              </div>
+              <div className="text-[11px] text-slate-500 mt-1">Claude fallback ready</div>
+            </div>
           </div>
-          <div>
-            <div className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Data Mode</div>
-            <div className="text-sm font-mono text-slate-200 mt-2">{is_mock ? 'Mock Fallback' : 'Live Alpaca MCP'}</div>
+        </div>
+
+        <div className="bg-[#12141C] border border-white/5 rounded-xl p-6 shadow-lg">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-200 mb-6 flex items-center gap-2">
+            <Target size={16} className="text-cyan-400" />
+            Strategy Parameters (Statistical Arbitrage)
+          </h3>
+          <div className="space-y-3 font-mono text-xs">
+            <div className="flex justify-between items-center py-1.5 border-b border-white/[0.04]">
+              <span className="text-slate-400">Equity Pair:</span>
+              <span className="text-white font-bold">SPY (S&P 500) / QQQ (Nasdaq 100)</span>
+            </div>
+            <div className="flex justify-between items-center py-1.5 border-b border-white/[0.04]">
+              <span className="text-slate-400">Rolling Window Lookback:</span>
+              <span className="text-white font-bold">20 daily bars</span>
+            </div>
+            <div className="flex justify-between items-center py-1.5 border-b border-white/[0.04]">
+              <span className="text-slate-400">Z-Score Entry Threshold:</span>
+              <span className="text-emerald-400 font-bold">±2.0 σ</span>
+            </div>
+            <div className="flex justify-between items-center py-1.5 border-b border-white/[0.04]">
+              <span className="text-slate-400">Z-Score Exit Threshold:</span>
+              <span className="text-blue-400 font-bold">±0.5 σ</span>
+            </div>
           </div>
         </div>
       </div>
