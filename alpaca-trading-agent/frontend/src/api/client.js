@@ -45,7 +45,7 @@ export class APIClient {
   async get(endpoint, options = {}) { return this.request(endpoint, { method: 'GET', ...options }); }
   async post(endpoint, body = {}, options = {}) { return this.request(endpoint, { method: 'POST', body: JSON.stringify(body), ...options }); }
 
-  getHealth() { return this.get('/health'); }
+  getHealth() { return this.get('/api/system-status'); }
   getAccount() { return this.get('/api/account'); }
   getPositions() { return this.get('/api/positions'); }
   getOrders() { return this.get('/api/orders'); }

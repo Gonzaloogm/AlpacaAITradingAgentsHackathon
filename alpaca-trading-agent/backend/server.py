@@ -208,6 +208,7 @@ async def shutdown_event() -> None:
 
 
 @app.get("/health")
+@app.get("/api/system-status")
 async def health_check() -> Dict[str, Any]:
     """Health check endpoint to verify server availability.
 
